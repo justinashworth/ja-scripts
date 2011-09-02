@@ -1,0 +1,14 @@
+remember to use/get better at using:
+	sapply
+	tapply
+	%in%
+	merge
+	duplicated
+	locator (interactive plot clicking--e.g. selecting things to identify them, put them in lists, apply analyses to them, etc?)
+
+save and clean useful histories for later reference and use as scripts
+(also) write RData
+
+to debug cMonkey errors:
+	> options(error=recover)
+	> cmonkey(e,dont.init=T)
