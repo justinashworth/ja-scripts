@@ -70,8 +70,16 @@ void regions_contain_both_positions(
 	}
 }
 
+void print_help( std::ostream & os ) {
+	os << "examples:\n";
+	os << "{this exec} -t occupancy -p positions.MAST.FL10.Chr -r H.sal.genome.regions -i 100 -s 2014239\n";
+	os << "{this exec} -t occupancy -p1 positions.MAST.FL10.Chr -p2 positions.MAST.FL11.Chr -r H.sal.genome.regions -i 100 -s 2014239\n";
+	os << std::endl;
+}
+
 void option_error( std::string option ) {
 	std::cerr << "error option " << option << std::endl;
+	print_help(std::cerr);
 	exit(EXIT_FAILURE);
 }
 
@@ -119,6 +127,7 @@ int main( int argc, char *argv[] ) {
 	pos1file.open( pos1filename.c_str() );
 	if (!pos1file) {
 		std::cerr << "error, couldn't open positions(1) file " << pos1filename << std::endl;
+		print_help(std::cerr);
 		exit(EXIT_FAILURE);
 	} else std::cerr << "opened file " << pos1filename << std::endl;
 
@@ -136,6 +145,7 @@ int main( int argc, char *argv[] ) {
 		pos2file.open( pos2filename.c_str() );
 		if (!pos2file) {
 			std::cerr << "error, couldn't open positions(2) file " << pos2filename << std::endl;
+			print_help(std::cerr);
 			exit(EXIT_FAILURE);
 		} else std::cerr << "opened file " << pos2filename << std::endl;
 
@@ -160,6 +170,7 @@ int main( int argc, char *argv[] ) {
 	regionsfile.open( regionsfilename.c_str() );
 	if (!regionsfile) {
 		std::cerr << "error, couldn't open file " << regionsfilename << std::endl;
+		print_help(std::cerr);
 		exit(EXIT_FAILURE);
 	} else std::cerr << "opened file " << regionsfilename << std::endl;
 
@@ -180,6 +191,7 @@ int main( int argc, char *argv[] ) {
 		regions_contain_both_positions(regions,pos1,pos2);
 	} else {
 		std::cerr << "Unknown mode " << type << std::endl;
+		print_help(std::cerr);
 		exit(EXIT_FAILURE);
 	}
 

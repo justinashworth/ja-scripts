@@ -5,11 +5,11 @@ WFLAGS = -Wall -W -Wextra -pedantic
 
 # debug build flags
 DBFLAGS = -ggdb
-CXXFLAGS = $(WFLAGS) $(DBFLAGS)
+#CXXFLAGS = $(WFLAGS) $(DBFLAGS)
 
 # performance build flags
 OFLAGS = -O3
-#CXXFLAGS = $(WFLAGS) $(OFLAGS)
+CXXFLAGS = $(WFLAGS) $(OFLAGS)
 
 EXE = emp.distrib
 OBJECTFILES = emp.distrib.o
