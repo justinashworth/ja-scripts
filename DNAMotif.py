@@ -19,6 +19,7 @@ class DNAMotif:
 	# zero-substitution allows log-odds calculations, has similar effect to using pseudocounts
 	ZERO_PROB = 1e-2
 	sep = '\t'
+	#sep = ' '
 	def __init__(self,width=0,name='',pseudocounts=0,data_type='',bg=None):
 		self.set_width(width)
 		self.name = name
@@ -170,17 +171,20 @@ class DNAMotif:
 
 	def output_MEME_header(self):
 		out = []
-		out.append( 'MEME version 4' )
-		out.append( 'ALPHABET= %s' %(string.join(self.bases,'')) )
-		out.append( 'strands: + -' )
+		out.append( 'MEME version 4\n' )
+		out.append( 'ALPHABET= %s\n' %(string.join(self.bases,'')) )
+		out.append( 'strands: + -\n' )
 		out.append( 'Background letter frequencies (from' )
 		out.append( string.join( [ '%s %f' %(base,self.bg[base]) for base in self.bases ] ) )
 		return string.join(out,'\n') + '\n'
 
 	def output_MEME(self,name):
+#		name=re.sub('\.','_',name)
+#		name=re.sub('\.','',name)
 		out = []
 		out.append( 'MOTIF %s' %name )
 		out.append( self.output_MEME_logodds() )
+#		out.append( 'MOTIF %s' %name )
 		out.append( self.output_MEME_probs() )
 		return string.join(out,'\n') + '\n'
 
@@ -189,24 +193,24 @@ class DNAMotif:
 		out = []
 		self.make_logodds_matrix()
 		alength = len(self.bases)
-		out.append( 'log-odds matrix: alength= %i w= %i' %(alength,self.width) )
+		out.append( 'log-odds matrix: alength= %i w= %i ' %(alength,self.width) )
 		for i in range(self.width):
-			line = ''
+			line = []
 			for base in self.bases:
-				line += '%s%f' %(self.sep,self.matrix['logodds'][i][base])
-			out.append(line)
+				line.append('%f' %self.matrix['logodds'][i][base])
+			out.append(string.join(line,self.sep))
 		return string.join(out,'\n') + '\n'
 
 	def output_MEME_probs(self):
 		out = []
 		if self.matrix['probs']==[]: self.make_probs_matrix()
 		alength = len(self.bases)
-		out.append( 'letter-probability matrix: alength= %i w= %i' %(alength,self.width) )
+		out.append( 'letter-probability matrix: alength= %i w= %i nsites= 1 E= 0 ' %(alength,self.width) )
 		for i in range(self.width):
-			line = ''
+			line = []
 			for base in self.bases:
-				line += '%s%f' %(self.sep,self.matrix['probs'][i][base])
-			out.append(line)
+				line.append('%f' %self.matrix['probs'][i][base])
+			out.append(string.join(line,self.sep))
 		return string.join(out,'\n') + '\n'
 
 class DNAMotifs:

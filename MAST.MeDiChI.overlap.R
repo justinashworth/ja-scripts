@@ -5,10 +5,13 @@ source('peak.overlap.R')
 
 # bootstrap p-value for MeDiChI fits
 MeDiChI.pval.cutoff=0.05
-MeDiChI.pval.cutoff=0.02
+#MeDiChI.pval.cutoff=0.02
 # MAST p-value cutoff (default MAST cutoff is 1e-4, which includes some fairly weak matches)
+#MAST.pval.cutoff=1e-4
 # cutoff of 5e-5 usually cuts out around half of genome-wide hits
-MAST.pval.cutoff=5e-5
+#MAST.pval.cutoff=5e-5
+# don't apply cutoff here, assume MAST cutoff was sufficient
+MAST.pval.cutoff=1
 
 # keys: MAST key, values MAST and MeDiChI names
 synon=list(
@@ -21,6 +24,18 @@ synon=list(
 	'VNG1179C'=c('VNG1179C','p1179'),
 	'VNG1237C'=c('VNG1237C','p1237')
 )
+
+conv.tf.name =
+	function(x)
+{
+	for(key in names(synon)){
+		if(x %in% synon[[key]]){
+			x=key
+			break
+		}
+	}
+	return(x)
+}
 
 # keys: MAST key, values MAST and MeDiChI names
 seqsyn=list(
@@ -36,16 +51,6 @@ seqlens=list(
 	'pNRC200'=365425,
 	'NC'=0
 )
-
-PREPROCESS=TRUE
-#PREPROCESS=FALSE
-
-if(!PREPROCESS){
-preproc.data='MAST.MeDiChI.overlap.preproc.RData'
-cat('reading pre-processed data from',preproc.data,'\n')
-load(preproc.data)
-
-}else{
 
 # R data structure for new fits file (2011-02-21_fitslist.combined.RData)
 # fitslist.combined$p1179$p1179.1.1_2.1$fits.fin$NC[[1]]$coeffs.w.p.values
@@ -75,7 +80,7 @@ if(!exists('masthits')){
 
 # regions in which to count overlaps
 if(!exists('regions')){
-	upstream=400
+	upstream=500
 	downstream=100
 	coords=read.delim('halo.gene.coords.tsv')
 	coords$Start = as.numeric(coords$Start)
@@ -92,74 +97,72 @@ if(!exists('regions')){
 	names(regions)=c('name','seq','start','end')
 }
 
-annotate.regions =
-	# SLOOOOW (because R sucks at for loops)
-	function(positions,regions)
-{
-	result=
-	sapply(positions,
-		function(x){
-			for(i in 1:nrow(regions)){
-				if(x>regions$start[i] & x<regions$end[i]){
-					return(as.character(regions$name[i]))
-				}
-			}
-			return(NA)
-		}
-	)
-	return(unlist(result))
-}
+#annotate.regions =
+#	# SLOOOOW (because R sucks at for loops)
+#	function(positions,regions)
+#{
+#	result=
+#	sapply(positions,
+#		function(x){
+#			for(i in 1:nrow(regions)){
+#				if(x>regions$start[i] & x<regions$end[i]){
+#					return(as.character(regions$name[i]))
+#				}
+#			}
+#			return(NA)
+#		}
+#	)
+#	return(unlist(result))
+#}
 
-if(FALSE){
-#if(TRUE){
-# assign regions to hits
-# [got too frustrated with sapply's returning lists with this one]
-cat('assigning regions to MAST hits...\n')
-masthits$region=NA
-for(seq in names(seqlens)){
-	cat(seq,'\n')
-	seq.regions = regions[regions$seq==seq,]
-	seq.hits.i = which(masthits$sequence_name==seq)
-	seq.hitpos = (masthits$hit_start[seq.hits.i]+masthits$hit_end[seq.hits.i])/2
-	masthits$region[seq.hits.i] = annotate.regions(seq.hitpos,seq.regions)
-}}
-
-if(FALSE){
-# assign regions to peaks
-cat('assigning regions to ChIP peaks...\n')
-# pre-annotate ChIP peaks in certain regions (e.g. promoters)
-for(tf in names(MeDiChI.fits)){
-	cat('tf',tf,'\n')
-	for(exp in names(MeDiChI.fits[[tf]])){
-		cat('\texp',exp,'\n')
-		seqs=names(MeDiChI.fits[[tf]][[exp]]$fits.fin)
-		for(seq in seqs){
-			if(seq=='NC')next
-			# translate to common sequence name
-			commonseq=NULL
-			for(key in names(seqsyn)){
-				if(seq %in% seqsyn[[key]]){
-					commonseq=key
-					break
-				}
-			}
-			cat('\t\tseq',commonseq,'\n')
-			seq.regions = regions[regions$seq==commonseq,]
-			peaks = MeDiChI.fits[[tf]][[exp]]$fits.fin[[seq]][[1]]$coeffs.w.p.values
-			# also apply p-value cutoff here, to avoid wasting time
-			peaks = as.data.frame(peaks[peaks[,3]<MeDiChI.pval.cutoff,])
-#			print(peaks)
-			# stupid R can't do peaks[,1] on a one-row slice...
-			if(class(peaks)=='numeric') positions= round(peaks[1])
-			else positions=round(peaks[,1])
-			peak.regions=annotate.regions(positions,seq.regions)
-			MeDiChI.fits[[tf]][[exp]]$fits.fin[[seq]][[1]]$coeffs.w.p.values = cbind(peaks,peak.regions)
-		}
-	}
-}}
-
-#save.image('MAST.MeDiChI.overlap.preproc.RData')
-} # END PREPROCESSING SECTION
+#if(FALSE){
+##if(TRUE){
+## assign regions to hits
+## [got too frustrated with sapply's returning lists with this one]
+#cat('assigning regions to MAST hits...\n')
+#masthits$region=NA
+#for(seq in names(seqlens)){
+#	cat(seq,'\n')
+#	seq.regions = regions[regions$seq==seq,]
+#	seq.hits.i = which(masthits$sequence_name==seq)
+#	seq.hitpos = (masthits$hit_start[seq.hits.i]+masthits$hit_end[seq.hits.i])/2
+#	masthits$region[seq.hits.i] = annotate.regions(seq.hitpos,seq.regions)
+#}}
+#
+#if(FALSE){
+##if(TRUE){
+## assign regions to peaks
+#cat('assigning regions to ChIP peaks...\n')
+## pre-annotate ChIP peaks in certain regions (e.g. promoters)
+#for(tf in names(MeDiChI.fits)){
+#	cat('tf',tf,'\n')
+#	for(exp in names(MeDiChI.fits[[tf]])){
+#		cat('\texp',exp,'\n')
+#		seqs=names(MeDiChI.fits[[tf]][[exp]]$fits.fin)
+#		for(seq in seqs){
+#			if(seq=='NC')next
+#			# translate to common sequence name
+#			commonseq=NULL
+#			for(key in names(seqsyn)){
+#				if(seq %in% seqsyn[[key]]){
+#					commonseq=key
+#					break
+#				}
+#			}
+#			cat('\t\tseq',commonseq,'\n')
+#			seq.regions = regions[regions$seq==commonseq,]
+#			peaks = MeDiChI.fits[[tf]][[exp]]$fits.fin[[seq]][[1]]$coeffs.w.p.values
+#			# also apply p-value cutoff here, to avoid wasting time
+#			peaks = as.data.frame(peaks[peaks[,3]<MeDiChI.pval.cutoff,])
+##			print(peaks)
+#			# stupid R can't do peaks[,1] on a one-row slice...
+#			if(class(peaks)=='numeric') positions= round(peaks[1])
+#			else positions=round(peaks[,1])
+#			peak.regions=annotate.regions(positions,seq.regions)
+#			MeDiChI.fits[[tf]][[exp]]$fits.fin[[seq]][[1]]$coeffs.w.p.values = cbind(peaks,peak.regions)
+#		}
+#	}
+#}}
 
 # count number of sites within x bp of each other
 count_overlaps.distance =
@@ -177,30 +180,58 @@ empirical_distrib.distance =
 	return(length(which(distances$dis<dis)))
 }
 
+#regions.contain.positions =
+#	function(regions,positions)
+#{
+#	result=
+#	sapply(1:nrow(regions),
+#		function(r){
+#			after.start = positions >= regions$start[r]
+#			before.end = positions <= regions$end[r]
+#			TRUE %in% (after.start & before.end)
+#		}
+#	)
+#	return(result)
+#}
+
 regions.contain.positions =
-	function(regions,positions)
+	function(reg,positions)
 {
 	result=
-	sapply(1:nrow(regions),
+	sapply(1:nrow(reg),
 		function(r){
-			after.start = positions >= regions$start[r]
-			before.end = positions <= regions$end[r]
-			TRUE %in% (after.start & before.end)
+			after.start = positions >= reg$start[r]
+			before.end = positions <= reg$end[r]
+			as.character(reg$name[ after.start & before.end ])
+		}
+	)
+	return(unlist(result))
+}
+
+both.positions.region =
+	function(reg,p1p2)
+{
+	result=sapply(1:nrow(p1p2),
+		function(i){
+			regs.contain = reg$start <= p1p2[i,1] & reg$start <= p1p2[i,2] & reg$end >= p1p2[i,1] & reg$end >= p1p2[i,2]
+			if(length(which(regs.contain))==0){regs.contain=NA}
+			else{regs.contain=paste(reg$name[regs.contain],sep=',',collapse=',')}
+			return(regs.contain)
 		}
 	)
 	return(result)
 }
 
 empirical_distrib.regions =
-	function(a,b,l,regions)
+	function(a,b,l,reg)
 {
 	if(a<1 | b<1 | l<1) return(0)
 	# equal number of random positions
 	rand.a = runif(a,1,l)
 	rand.b = runif(b,1,l)
 	# count number of regions that contain both a and b positions
-	regions.a = which( regions.contain.positions(regions,rand.a) )
-	regions.b = which( regions.contain.positions(regions,rand.b) )
+	regions.a = regions.contain.positions(reg,rand.a)
+	regions.b = regions.contain.positions(reg,rand.b)
 	noverlap = length( intersect(regions.a,regions.b) )
 	return(noverlap)
 }
@@ -211,15 +242,16 @@ compute.MAST.MeDiChI.overlaps =
 {
 	cat('comparing genome-wide MAST hits with p-value less than',MAST.pval.cutoff,'within',overlap.distance,'bp of MeDiChI peaks with p-value less than',MeDiChI.pval.cutoff,'\n')
 	MAST.TFs=levels(factor(masthits$motif))
-	overlaps=data.frame(masttf=c(),chiptf=c(),nmast=c(),nchip=c(),noverlap=c(),pval=c())
+	overlaps=data.frame(seq=c(),mast.tf=c(),mast.pos=c(),chip.tf=c(),chip.exp=c(),chip.pos=c(),region=c())
+	overlap.counts=data.frame(mast.tf=c(),chip.exp=c(),nmast=c(),nchip=c(),noverlap=c(),pval=c())
 
-	for(masttf in MAST.TFs){
-		cat('\n',masttf,'\n')
-		for(chiptf in names(chipfits)){
-			for(exp in names(chipfits[[chiptf]])){
+	for(mast.tf in MAST.TFs){
+		cat('\n',mast.tf,'\n')
+		for(chip.tf in names(chipfits)){
+			for(exp in names(chipfits[[chip.tf]])){
 
 				cat('\t',exp,'\n')
-				seqs=names(chipfits[[chiptf]][[exp]]$fits.fin)
+				seqs=names(chipfits[[chip.tf]][[exp]]$fits.fin)
 				#'wg' stands for 'whole genome'
 				nmast_wg=0
 				nchip_wg=0
@@ -245,33 +277,41 @@ compute.MAST.MeDiChI.overlaps =
 					}
 
 					noverlap=0
-					seqmasthits=masthits[masthits$sequence==mastseq & grepl(masttf,masthits$motif),]
+					seqmasthits=masthits[masthits$sequence==mastseq & grepl(mast.tf,masthits$motif),]
 					hitpos=round((seqmasthits$hit_start+seqmasthits$hit_end)/2)
 					nmast=length(hitpos)
 		#			print(hitpos)
 
-					ppeaks=chipfits[[chiptf]][[exp]]$fits.fin[[chipseq]][[1]]$coeffs.w.p.values
+					sig.peaks=chipfits[[chip.tf]][[exp]]$fits.fin[[chipseq]][[1]]$coeffs.w.p.values
 					# apply p-value filter to ChIP fit peaks
-					ppeaks=ppeaks[ppeaks[,3]<MeDiChI.pval.cutoff,]
+					sig.peaks=sig.peaks[sig.peaks[,3]<MeDiChI.pval.cutoff,]
 					peak.positions=numeric()
 					# special handling for 1-(or 0?) row results of filtering
-					if(class(ppeaks)=='numeric'){
-						peak.positions=ppeaks[1]
+					if(class(sig.peaks)=='numeric'){
+						peak.positions=sig.peaks[1]
 					}else{
-						peak.positions=ppeaks[,1]
+						peak.positions=sig.peaks[,1]
 					}
-#					print(ppeaks)
+#					print(sig.peaks)
 					npeaks=length(peak.positions)
 					cat(nmast,'MAST hits vs.',npeaks,'MeDiChI peaks\n')
 
 					if(nmast<1 | npeaks<1){
 						noverlap=0
 					}else if(comparison=='distance'){
-						noverlap=count_overlaps.distance(hitpos,peak.positions,dis=overlap.distance)
+						#noverlap=count_overlaps.distance(hitpos,peak.positions,dis=overlap.distance)
+						distances=pairwise.site.distance(hitpos,peak.positions)
+						overlapping=distances[distances$dis<overlap.distance,]
+						if(nrow(overlapping)>0){
+							# annotate overlaps contained in [promoter] regions
+							ann=both.positions.region(regions[regions$seq==mastseq,],overlapping[,c(1,2)])
+							overlaps=rbind(overlaps,data.frame(seq=mastseq,mast.tf=mast.tf,mast.pos=overlapping[,1],chip.tf=chip.tf,chip.exp=exp,chip.pos=round(overlapping[,2]),region=ann))
+						}
+						noverlap = nrow(overlapping)
 					}else if(comparison=='regions'){
 						# count number of regions that contain both MAST hits and ChIP peaks
-						regions.hits = which( regions.contain.positions(regions,hitpos) )
-						regions.peaks = which( regions.contain.positions(regions,peak.positions) )
+						regions.hits = regions.contain.positions(regions[regions$seq==mastseq,],hitpos)
+						regions.peaks = regions.contain.positions(regions[regions$seq==mastseq,],peak.positions)
 						noverlap = length( intersect(regions.hits,regions.peaks) )
 					}else{
 						cat('invalid comparison type',comparison,'\n')
@@ -291,7 +331,7 @@ compute.MAST.MeDiChI.overlaps =
 						}else if(comparison=='regions'){
 							# count overlaps in regions for simulated random distributions of hits and peaks (emperical)
 							noverlap_random[[mastseq]]=
-								replicate(emp_iters,empirical_distrib.regions(nmast,npeaks,seqlens[[mastseq]],regions))
+								replicate(emp_iters,empirical_distrib.regions(nmast,npeaks,seqlens[[mastseq]],regions[regions$seq==mastseq,]))
 						}else{
 							cat('invalid comparison type',comparison,'\n')
 						}
@@ -304,23 +344,30 @@ compute.MAST.MeDiChI.overlaps =
 					emp_overlaps=rowSums(do.call(cbind,noverlap_random))
 					pval=length(which(emp_overlaps>=noverlap_wg))/length(emp_overlaps)
 				}
-				overlaps=rbind(overlaps,data.frame(masttf=masttf,chiptf=exp,nmast=nmast_wg,nchip=nchip_wg,noverlap=noverlap_wg,pval=pval))
+				overlap.counts=rbind(overlap.counts,data.frame(mast.tf=mast.tf,chip.tf=chip.tf,chip.exp=exp,nmast=nmast_wg,nchip=nchip_wg,noverlap=noverlap_wg,pval=pval))
 			}
 		}
 	}
-	return(overlaps)
+	return(list(overlaps=overlaps,counts=overlap.counts))
 }
 
-est.significance=TRUE
-#est.significance=FALSE
+#est.significance=TRUE
+est.significance=FALSE
 comparison='distance'
-comparison='regions'
+#comparison='regions'
 emp_iters=250
 #emp_iters=10
-overlap.distance=200
+overlap.distance=100
 
 overlaps=compute.MAST.MeDiChI.overlaps(masthits,MeDiChI.fits,MeDiChI.pval.cutoff=MeDiChI.pval.cutoff,overlap.distance=overlap.distance,est.significance=est.significance,emp_iters=emp_iters,comparison=comparison,regions=regions)
+
+# add gene names
+overlaps$overlaps = merge(overlaps$overlaps, coords[,c(1,2)],by.x='region',by.y='canonical_Name',sort=F,all.x=T)
+# convert base chip TF names
+overlaps$overlaps$chip.tf = sapply(overlaps$overlaps$chip.tf, conv.tf.name)
+
 print(overlaps)
+
 
 fname='MAST.MeDiChI.overlap.'
 if(comparison=='distance'){
@@ -328,6 +375,6 @@ if(comparison=='distance'){
 }else if(comparison=='regions'){
 	fname=paste(fname,'regions.',sep='')
 }
-fname=paste(fname,'tsv',sep='')
 
-write.table(overlaps,fname,quote=F,row.names=F,sep='\t')
+write.table(overlaps$overlaps,paste(fname,'overlaps.tsv',sep=''),quote=F,row.names=F,sep='\t')
+write.table(overlaps$counts,paste(fname,'overlap.counts.tsv',sep=''),quote=F,row.names=F,sep='\t')

@@ -70,7 +70,7 @@ class App:
 			self.threePrime(opt.threeprime)
 
 	def loadGenes(self,genes):
-		print 'probe\tsequence\tstrand\tstart\tend\tgene'
+		print 'probe\tsequence\tstrand\tstart\tend\tgeneid'
 		self.genes = {}
 		re_gene = Gene.re_gene
 		for match in re_gene.finditer(open(genes).read()):
@@ -113,7 +113,7 @@ class App:
 			# assign probe to overlapping gene region(s)
 			halfprobe = abs(end-start)/2
 			if not self.genes.has_key(seq):
-				sys.stderr.write('sequence \'%s\' not in reference!\n' %seq)
+				sys.stderr.write('sequence \'%s\' not in genes!\n' %seq)
 				continue
 			for gene in self.genes[seq][strand]:
 #				print str(gene)

@@ -52,7 +52,37 @@ process.separate_files =
 	return(h)
 }
 
-source('~/scripts/isb-scripts/annote.promoters.R')
+# promoter regions
+if(!exists('regions')){
+	upstream=500
+	downstream=100
+	coords=read.delim('halo.gene.coords.tsv')
+	coords$Start = as.numeric(coords$Start)
+	coords$cis.start = 0
+	coords$cis.end = 0
+	fwd = coords$Orientation == 'For'
+	coords$cis.start[fwd] = coords$Start[fwd] - upstream
+	coords$cis.end[fwd] = coords$Start[fwd] + downstream
+	# in halo gene coords, 'Start' (generally) refers to actual start (i.e. start > end)
+	rvs = coords$Orientation == 'Rev'
+	coords$cis.start[rvs] = coords$Start[rvs] + upstream
+	coords$cis.end[rvs] = coords$Start[rvs] - downstream
+	regions=coords[,names(coords) %in% c('canonical_Name','where','cis.start','cis.end')]
+	names(regions)=c('name','seq','start','end')
+}
+
+annotate.promoters =
+	function(posns,regns)
+{
+	return( sapply(posns,
+		function(x){
+			regns.contain = regns$start <= x & regns$end >= x
+			if(length(which(regns.contain))==0){regns.contain=NA}
+			else{regns.contain=paste(regns$name[regns.contain],sep=',',collapse=',')}
+			return(regns.contain)
+		}
+	))
+}
 
 h = NULL
 if (processfiles) {
@@ -66,8 +96,10 @@ if (processfiles) {
 	}
 
 	# rearrange columns
+	# should yield:sequence_name	motif	dir	hit_start	hit_end	score	hit_p.value
 	h = h[,c(1,2,7,3,4,5,6)]
-	h = annote.promoters(h)
+	h$promoters = annotate.promoters((h[,4]+h[,5])/2,regions)
+
 	# write file
 	write.table(h,'hitsflat.tsv',quote=F,row.names=F,sep='\t')
 
@@ -78,13 +110,14 @@ if (processfiles) {
 }
 
 # ANALYSIS/PLOTTING/OUTPUT
+quit('no')
 png=1
 
 motifs = levels(factor(h$motif))
 # filter down to Halo
 motifs = motifs[grepl('Halo',motifs)]
 # add back 2e1c.WT
-motifs = c(motifs,'2e1c.WT')
+#motifs = c(motifs,'2e1c.WT')
 # filter hits
 h = subset(h,motif %in% motifs)
 require(gdata)

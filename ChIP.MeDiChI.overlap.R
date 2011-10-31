@@ -199,6 +199,11 @@ compute.MeDiChI.overlaps =
 				pval=length(which(emp_overlaps>=noverlap_wg))/length(emp_overlaps)
 			}
 			overlaps=rbind(overlaps,data.frame(chip1=exp1,chip2=exp2,n1=n1_wg,n2=n2_wg,noverlap=noverlap_wg,pval=pval))
+			# flip chip ids to fill symmetric matrix (useful later for xtabs, heatmaps, etc)
+			# (except for self-self)
+			if(!chip1==chip2){
+				overlaps=rbind(overlaps,data.frame(chip1=exp2,chip2=exp1,n1=n1_wg,n2=n2_wg,noverlap=noverlap_wg,pval=pval))
+			}
 		}
 	}
 	return(overlaps)
