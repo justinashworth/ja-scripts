@@ -65,7 +65,7 @@ class App:
 	def run(self,opt,args):
 		self.loadGenes(opt.genes)
 		sys.stderr.write(self.geneOverlap()+'\n')
-		self.loadProbes(opt.probes)
+		self.loadProbes(opt.probes,opt.antisense)
 		if opt.threeprime:
 			self.threePrime(opt.threeprime)
 
@@ -73,12 +73,15 @@ class App:
 		print 'probe\tsequence\tstrand\tstart\tend\tgeneid'
 		self.genes = {}
 		re_gene = Gene.re_gene
+		gcount = 0
 		for match in re_gene.finditer(open(genes).read()):
 			id,seq,strand,start,end = match.groups()
 			start = int(start)
 			end = int(end)
 			if not self.genes.has_key(seq): self.genes[seq] = {'+':[],'-':[]}
 			self.genes[seq][strand].append( Gene(id,seq,strand,start,end) )
+			gcount += 1
+		sys.stderr.write('%s genes read\n' %gcount)
 
 	def geneOverlap(self):
 		# compare gene boundaries to identify overlaps
@@ -104,12 +107,26 @@ class App:
 								out.append('gene %s overlaps gene %s' %(gene1.id,gene2.id))
 		return string.join(out,'\n')
 
-	def loadProbes(self,probes):
+	def loadProbes(self,probes,antisense=False):
 		re_probe = Probe.re_probe
+		pcount = 0
+		pcount_assigned = 0
+		pcount_genes = 0
 		for match in re_probe.finditer(open(opt.probes).read()):
 			name,seq,strand,start,end = match.groups()
+			pcount += 1
+			if antisense:
+				if strand == '+': strand = '-'
+				elif strand == '-': strand = '+'
+				else: print 'unknown strand!'
 			start=int(start)
 			end=int(end)
+			# correct for flipped start and end coords
+			if start > end:
+				sys.stderr.write('correcting flipped start/end\n')
+				newstart = end
+				end = start
+				start = newstart
 			# assign probe to overlapping gene region(s)
 			halfprobe = abs(end-start)/2
 			if not self.genes.has_key(seq):
@@ -119,11 +136,14 @@ class App:
 #				print str(gene)
 				# both probes and genes should be numbered with stop>start, regardless of strand
 #				print start,end,gene.start,gene.end
-				if start+halfprobe-1 >= gene.start and end <= gene.end+halfprobe-1:
+				if start + halfprobe - 1 >= gene.start and end <= gene.end + halfprobe - 1:
+					pcount_assigned += 1
+					if len(gene.probes) < 1: pcount_genes += 1
 					# low-memory option: don't store probes in memory: just print them
 #					print '%s\t%s\t%s\t%i\t%i\t%s' %(probe,seq,strand,start,end,gene.id)
 					# high memory option--allows further analysis and processing
 					gene.probes.append( Probe(name,seq,strand,start,end) )
+		sys.stderr.write('%i probes read, %i assigned in %i genes\n' %(pcount,pcount_assigned,pcount_genes) )
 
 	def threePrime(self,nselect):
 		# filter set of probes for each gene down to those nselect closest to 3' end of the gene
@@ -165,6 +185,7 @@ if __name__ == "__main__":
 	p=OptionParser()
 	p.add_option('-p','--probes')
 	p.add_option('-g','--genes')
+	p.add_option('-a','--antisense',action='store_true')
 	p.add_option('--threeprime',type='int',default='3')
 	opt,args=p.parse_args()
 	app = App()

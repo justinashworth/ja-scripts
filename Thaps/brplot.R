@@ -165,7 +165,7 @@ cells.vs.time[,2]=as.numeric(cells.vs.time[,2])/100
 # base plot window (cell count is left y-axis)
 #ylims$cells=as.numeric(c(min(cells.vs.time[,2],na.rm=T),as.numeric(max(cells.vs.time[,2],na.rm=T))+topinnermargin))
 #main=expression(paste(bolditalic('Thalassiosira'),' growth in elevated ',CO[2],' (800 ppm)'))
-main=expression(bolditalic('Thalassiosira')*' growth in elevated '*CO[2]*' (~800 ppm)')
+main=expression(bolditalic('T. pseudonana')*' growth in elevated '*CO[2]*' (~800 ppm)')
 plot(cells.vs.time,xlim=xlim,ylim=ylims$cells,cex.lab=cex.mtext*1.33,main=main,xlab='',ylab='',type='n',yaxt='n',xaxp=c(0,140,7))
 line=3
 if(size=='print'){line=5}
@@ -275,6 +275,9 @@ if(size=='print'){line=4}
 mtext('pH',side=4,line=line,at=8.6,cex=cex.mtext*1)
 
 # dO2
+plot.dO2 = FALSE
+plot.dO2 = TRUE
+if ( plot.dO2 ) {
 dO2.manual=FALSE
 if(dO2.manual){
 	# convert probe voltages to mg/L
@@ -315,8 +318,11 @@ if(size=='print'){line=8}
 axis(4,pretty(c(85,100)),at=pretty(c(85,100)),labels=pretty(c(85,100)),line=line,col=colors$dO2,col.axis=colors$dO2,lwd=lwd,padj=padj)
 mtext(expression(paste(dO[2],' (%)')),4,adj=0.85,line=line+1,col=colors$dO2,cex=cex.mtext*0.8)
 #mtext(expression(paste(dO[2],' (mg/L)')),4,adj=1,line=line,col=colors$dO2,cex=cex.mtext*0.8)
+} # plot dO2
 
 # plot temperature
+plot_temp = FALSE
+if ( plot_temp ) {
 par(new=T)
 plot(auto$LogTime,auto$Temp,xlim=xlim,ylim=ylims$Temp,ylab='',xlab='',col=colors$Temp,axes=F,type='l',bg='transparent')
 line=4
@@ -325,6 +331,7 @@ axis(4,pretty(c(18,22)),line=8,col=colors$Temp,col.axis=colors$Temp,lwd=lwd,padj
 line=7
 if(size=='print'){line=14}
 mtext(expression(paste('Temp. (',{}^o,'C)')),4,line=line,at=20,col=colors$Temp,cex=cex.mtext)
+}
 
 # plot fluorescence
 par(new=T)
@@ -341,6 +348,8 @@ dcmu=t(sapply(manual$dcmu,delim.mean.sd))
 manual$pe=(dcmu[,1]-flu[,1])/dcmu[,1]
 #manual$pe.sd=?
 par(new=T)
+line=7
+if(size=='print'){line=14}
 #ylims$PE=c(0,max(manual$pe,na.rm=T))
 plot(na.exclude(cbind(manual$expt.time,manual$pe)),xlim=xlim,ylim=ylims$PE,ylab='',xlab='',col=colors$PE.trans,axes=F,pch=16,cex=cex.points,bg='transparent')
 lines(lowess(na.exclude(cbind(manual$expt.time,manual$pe)),f=lowessf*1),lty=2,col=colors$PE)
@@ -371,15 +380,21 @@ if(nutrients){
 	trendlines=FALSE
 	trendlines=TRUE
 	trendf=0.1
-	legx=xlim[2]-10
+	legx=xlim[2]-15
 
 	# plot PO4
 	par(new=T)
 	pcex=1
 	if(size=='print'){pcex=1.5}
 	plot(na.exclude(cbind(manual$expt.time,manual$PO4)),xlim=xlim,ylim=ylims$PO4,ylab='',xlab='',col=colors$PO4,axes=F,pch=16,bg='transparent',cex=pcex)
+
+	maxnut = max(as.numeric(manual$PO4),na.rm=TRUE)
+	abline(h=maxnut,lty=2,lwd=lwd)
+	text(100,maxnut*0.9,'100%',cex=cex.mtext)
+
 	if(trendlines){lines(lowess(na.exclude(cbind(manual$expt.time,manual$PO4)),f=trendf),lty=2,col=colors$PO4)}
-	text(legx,ylims$PO4[2]*0.1,expression(PO[4]),col=colors$PO4,cex=cex.mtext)
+	nuttext = bquote( PO[4] (.(round(maxnut))) )
+	text(legx,ylims$PO4[2]*0.12, nuttext,col=colors$PO4,cex=cex.mtext)
 	#axis(4,pretty(c(18,22)),line=3,col=colors$PO4,col.axis=colors$PO4,lwd=lwd)
 	#mtext(expression(micro~M),4,line=6,at=20,col=colors$PO4,cex=cex.mtext)
 
@@ -387,7 +402,9 @@ if(nutrients){
 	par(new=T)
 	plot(na.exclude(cbind(manual$expt.time,manual$SiO4)),xlim=xlim,ylim=ylims$SiO4,ylab='',xlab='',col=colors$SiO4,axes=F,pch=16,bg='transparent',cex=pcex)
 	if(trendlines){lines(lowess(na.exclude(cbind(manual$expt.time,manual$SiO4)),f=trendf),lty=2,col=colors$SiO4)}
-	text(legx,ylims$SiO4[2]*0.15,expression(SiO[4]),col=colors$SiO4,cex=cex.mtext)
+	maxnut = max(as.numeric(manual$SiO4),na.rm=TRUE)
+	nuttext = bquote( SiO[4] (.(round(maxnut))) )
+	text(legx,ylims$SiO4[2]*0.18,nuttext,col=colors$SiO4,cex=cex.mtext)
 	#axis(4,pretty(c(18,22)),line=3,col=colors$SiO4,col.axis=colors$SiO4,lwd=lwd)
 	#mtext(expression(micro~M),4,line=6,at=20,col=colors$SiO4,cex=cex.mtext)
 
@@ -395,15 +412,22 @@ if(nutrients){
 	par(new=T)
 	plot(na.exclude(cbind(manual$expt.time,manual$NO3)),xlim=xlim,ylim=ylims$NO3,ylab='',xlab='',col=colors$NO3,axes=F,pch=16,bg='transparent',cex=pcex)
 	if(trendlines){lines(lowess(na.exclude(cbind(manual$expt.time,manual$NO3)),f=trendf),lty=2,col=colors$NO3)}
-	text(legx,ylims$NO3[2]*0.2,expression(NO[3]),col=colors$NO3,cex=cex.mtext)
+	maxnut = max(as.numeric(manual$NO3),na.rm=TRUE)
+	nuttext = bquote( NO[3] (.(round(maxnut))) )
+	text(legx,ylims$NO3[2]*0.24,nuttext,col=colors$NO3,cex=cex.mtext)
 	#axis(4,pretty(c(18,22)),line=3,col=colors$NO3,col.axis=colors$NO3,lwd=lwd)
 	#mtext(expression(micro~M),4,line=6,at=20,col=colors$NO3,cex=cex.mtext)
 
+	NH4=FALSE
+	if(NH4){
 	# plot NH4
 	par(new=T)
 	plot(na.exclude(cbind(manual$expt.time,manual$NH4)),xlim=xlim,ylim=ylims$NH4,ylab='',xlab='',col=colors$NH4,axes=F,pch=16,bg='transparent',cex=pcex)
 	if(trendlines){lines(lowess(na.exclude(cbind(manual$expt.time,manual$NH4)),f=trendf),lty=2,col=colors$NH4)}
-	text(legx,ylims$NH4[2]*0.25,expression(NH[4]),col=colors$NH4,cex=cex.mtext)
+	maxnut = max(as.numeric(manual$NH4),na.rm=TRUE)
+	nuttext = bquote( NH[4] (.(round(maxnut))) )
+	text(legx,ylims$NH4[2]*0.1,nuttext,col=colors$NH4,cex=cex.mtext)
 	#axis(4,pretty(c(18,22)),line=3,col=colors$NH4,col.axis=colors$NH4,lwd=lwd)
 	#mtext(expression(micro~M),4,line=6,at=20,col=colors$NH4,cex=cex.mtext)
+	}
 }

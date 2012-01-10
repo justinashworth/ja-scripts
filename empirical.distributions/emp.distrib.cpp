@@ -72,8 +72,8 @@ void regions_contain_both_positions(
 
 void print_help( std::ostream & os ) {
 	os << "examples:\n";
-	os << "{this exec} -t occupancy -p positions.MAST.FL10.Chr -r H.sal.genome.regions -i 100 -s 2014239\n";
-	os << "{this exec} -t occupancy -p1 positions.MAST.FL10.Chr -p2 positions.MAST.FL11.Chr -r H.sal.genome.regions -i 100 -s 2014239\n";
+	os << "{this exec} -p positions.MAST.FL10.Chr -r H.sal.genome.regions -i 100 -s 2014239\n";
+	os << "{this exec} -p1 positions.MAST.FL10.Chr -p2 positions.MAST.FL11.Chr -r H.sal.genome.regions -i 100 -s 2014239\n";
 	os << std::endl;
 }
 
@@ -95,20 +95,18 @@ public:
 
 int main( int argc, char *argv[] ) {
 
-	std::string type("occupancy"),pos1filename,pos2filename,regionsfilename;
+	std::string type("none"),pos1filename,pos2filename,regionsfilename;
 	int iters(1),seqlen(0);
 	for (int i(1); i<argc; ++i) {
 		std::string arg( argv[i] );
-		if (arg == "-t") {
-			if ( ++i >= argc ) option_error(arg);
-			type = argv[i];
-		} else if (arg == "-p1" || arg == "-p" ) {
+		if (arg == "-p1" || arg == "-p" ) {
 			if ( ++i >= argc ) option_error(arg);
 			pos1filename = argv[i];
+			type = "occupancy";
 		} else if (arg == "-p2") {
 			if ( ++i >= argc ) option_error(arg);
 			pos2filename = argv[i];
-			type == "overlap";
+			type = "overlap";
 		} else if (arg == "-r") {
 			if ( ++i >= argc ) option_error(arg);
 			regionsfilename = argv[i];
@@ -203,7 +201,7 @@ int main( int argc, char *argv[] ) {
 		std::cerr << numcont << " regions contain positions from both sets of positions" << std::endl;
 	}
 
-	// now estimate significance by simulating random distribution of equal number of positions in integer range
+	std::cerr << "estimating significance by simulating random distributions..." << std::endl;
 	std::vector<int> randcont;
 	int sum(0);
 	for ( int i(0); i < iters; ++i ) {
@@ -212,7 +210,7 @@ int main( int argc, char *argv[] ) {
 //		std::cerr << "randpos1: ";
 //		std::copy(randpos1.begin(),randpos1.end(),std::ostream_iterator<int>(std::cerr," "));
 //		std::cerr << std::endl;
-		std::cerr << '.';
+		if ( i % 100 == 0 ) std::cerr << '.';
 		if ( type == "overlap" && pos2.size() > 0 ) {
 			std::vector<int> randpos2( pos2.size() );
 			std::generate_n(randpos2.begin(), pos2.size(), GenRand(seqlen));

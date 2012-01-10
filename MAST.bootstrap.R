@@ -1,9 +1,13 @@
 #!/usr/bin/env Rscript
+
 # MAST target sequence (e.g. genome) with a starting MEME motif,
-#1 find matches (optionally filtered to certain regions, e.g. promoters),
-#2 build new motif based on actual matched sequences (mixture?)
-#3 re-MAST with new motif (bootstrap)
-# repeat 1-3 until...?
+#1 find matches (to do: optionally filtered to certain regions, e.g. promoters or ChIP overlaps?),
+#2 build new motif based on actual matched sequences
+#3 re-MAST with new [mixture] motif (bootstrap)
+# repeat 1-3 until satisfied
+
+# example
+#./MAST.bootstrap.R -m T.vol.FL3.MEME -s halo.genome.fa -n 100 -x 500 -b halo.bg.file -p 10 -g -X 0.25
 
 load.sequence =
 	# convenience function for loading fasta sequence into simple list format
@@ -52,6 +56,33 @@ seqs.to.count.matrix =
 	return(cmat)
 }
 
+# open starting MEME file, load prob matrix and display
+# assumes implicit MEME formatting and 4-column prob matrix
+MEME.pmat.from.file =
+	function(fname)
+{
+	lines = readLines(fname)
+	begin = FALSE
+	pmat = c()
+	for(line in lines){
+		words = unlist(strsplit(line,'[ \t]'))
+#		print(words)
+		if( length(words)<1 | all(words==' ') | all(words=='\t') ){
+#			cat('empty line\n')
+			if(begin){return(matrix(pmat,ncol=4,byrow=T))}
+			else next
+		}
+		if( words[1] == 'letter-probability' ){
+#			cat('start\n')
+			begin = TRUE
+			next
+		}
+		if(begin){
+			pmat = c(pmat,as.numeric(words))
+		}
+	}
+}
+
 write.MEME.motif =
 	function(prob.matrix,bg.probs,mname)
 {
@@ -78,27 +109,37 @@ opt = getopt(matrix(c(
 	'seqf'         , 's', 1, 'character',
 	'niter'        , 'n', 1, 'integer',
 	'maxhits'      , 'x', 1, 'integer',
-	'bfile'        , 'b', 1, 'character',
+	'mixture'      , 'X', 1, 'double',
+	'bgfile'       , 'b', 1, 'character',
+	'regions'      , 'r', 1, 'character',
 	'pseudocounts' , 'p', 1, 'integer',
-	'png'          , 'g', 0, 'logical'
+	'images'       , 'g', 0, 'logical',
+	'help'         , 'h', 0, 'logical'
 ),ncol=4,byrow=T))
-
-if( is.null(opt$motf) | is.null(opt$seqf) ) {
-	cat('args: -m <motif_file> -s <fasta_seq>\n')
-	opt$motf = 'T.vol.FL3.MEME'
-	opt$seqf = 'halo.genome.fa'
-	opt$bfile = 'halo.bg.file'
-#	q('no')
-}
 
 if( is.null(opt$niter) ) opt$niter = 10
 if( is.null(opt$maxhits) ) opt$maxhits = 500
+if( is.null(opt$mixture) ) opt$mixture = 0.25
 if( is.null(opt$pseudocounts) ) opt$pseudocounts = 1
-if( is.null(opt$png) ) opt$png = FALSE
+if( is.null(opt$images) ) opt$images = FALSE
+
+if( is.null(opt$motf) | is.null(opt$seqf) | !is.null(opt$help) ) {
+	cat('args: -m <motif_file> -s <fasta_seq> [-[n|-niter] <%d>] [-[x|-maxhits] <%d>] [-[b|-bgfile] <bgfile>] [-[p|-pseudocounts] <%d>] [-[g|-images]]\n')
+	opt$motf = 'T.vol.FL3.MEME'
+	opt$seqf = 'halo.genome.fa'
+	opt$bgfile = 'halo.bg.file'
+	opt$regions = 'halo.gene.coords.tsv'
+#	q('no')
+}
+
+if( opt$mixture < 0 | opt$mixture > 1 ){
+	cat('invalid mixture ratio\n')
+	q('no')
+}
 
 bg.probs = list()
 
-if( is.null(opt$bfile) ) {
+if( is.null(opt$bgfile) ) {
 	bg.probs = list(
 		'A'=0.25,
 		'C'=0.25,
@@ -106,35 +147,92 @@ if( is.null(opt$bfile) ) {
 		'T'=0.25
 	)
 } else {
-	for( line in readLines(opt$bfile) ) {
+	for( line in readLines(opt$bgfile) ) {
 		fields = unlist(strsplit(line,'[ \t]'))
 		bg.probs[fields[1]] = as.numeric(fields[2])
 	}
 }
 
-mast.args = '-hit_list'
-if( !is.null(opt$bfile) ) { mast.args = paste(mast.args,'-bfile',opt$bfile) }
+positions.in.regions =
+	function(positions,p1p2)
+{
+	return(sapply(p1p2,
+		function(x){
+			x >= p1p2[,1] & x <= p1p2[,2]
+		}
+	))
+}
+
+print(opt)
 
 cat('background probabilities:\n')
 print(paste(unlist(bg.probs)),sep='')
-
 cat('NOTE: currently stripping letter info in bg probs and assuming implicit A,C,G,T ordering!\n')
 
-if(opt$png) png('BS.motif.%d.png')
+# load regions in order to filter genome hits
+# regions is a 2-column matrix of start and end positions, with optional rownames
+regions = NULL
+if( !is.null(opt$regions) ){
+	upstream=500
+	downstream=100
+#	coords=read.delim('halo.gene.coords.tsv')
+	coords=read.delim(opt$regions,as.is=T)
+	coords$Start = as.numeric(coords$Start)
+	coords$cis.start = 0
+	coords$cis.end = 0
+	fwd = coords$Orientation == 'For'
+	coords$cis.start[fwd] = coords$Start[fwd] - upstream
+	coords$cis.end[fwd] = coords$Start[fwd] + downstream
+	# in halo gene coords, 'Start' (generally) refers to actual start (i.e. start > end)
+	rvs = coords$Orientation == 'Rev'
+	coords$cis.start[rvs] = coords$Start[rvs] + upstream
+	coords$cis.end[rvs] = coords$Start[rvs] - downstream
+	regions=coords[,names(coords) %in% c('canonical_Name','where','cis.start','cis.end')]
+	names(regions)=c('name','seq','start','end')
+}
+
+filter.hits.by.regions =
+	function(hits,regions)
+{
+	sapply(1:nrow(hits),
+		function(h){
+			seq.match = hits[h,1] == regions$seq
+			pos = (hits[h,3] + hits[h,4]) / 2
+			after.start = pos >= regions$start
+			before.end = pos <= regions$end
+			return( TRUE %in% (seq.match & after.start & before.end) )
+		}
+	)
+}
+
+mast.args = '-hit_list'
+if( !is.null(opt$bgfile) ) { mast.args = paste(mast.args,'-bfile',opt$bgfile) }
+
+# NOTE: 0001 will be the starting search motif, 0002 will be the first bootstrap motif
+if(opt$images) pdf('BS.motif.%04d.pdf',width=10,height=4,onefile=F)
+
+start.pmat = MEME.pmat.from.file(opt$motf)
+seqLogo(t(start.pmat))
+
+if(is.null(opt$images) | !opt$images) dev.new()
 
 mfile = opt$motf
 last.prob.matrix = NULL
 for( iter in 1:opt$niter ) {
 	cat('iter ',iter,'\n',sep='')
 	cat('MASTing motif from file "',mfile,'" in sequence from fasta file "',opt$seqf,'"\n',sep='')
-	hitfile = paste('hitfile.tmp.',iter,sep='')
+	hitfile = sprintf('BS.hitfile.%04d',iter,sep='')
 	mast.cmd = paste('mast',mfile,opt$seqf,mast.args,'>',hitfile)
 	cat(mast.cmd,'\n')
 	system(mast.cmd)
-	hits = read.table(hitfile)
+	hits = read.table(hitfile,as.is=T)
+
+	# filter by regions (if present)
+	if(!is.null(regions)) hits = hits[ filter.hits.by.regions(hits,regions), ]
+	cat(nrow(hits),' hits in regions\n')
 
 	# sort by pval and cull
-	hits=hits[ order(hits[,6])[ 1:min(nrow(hits),opt$maxhits) ] , ]
+	hits = hits[ order(hits[,6])[ 1:min(nrow(hits),opt$maxhits) ] , ]
 
 	# load searched sequence(s)
 	seqs = load.sequence(opt$seqf)
@@ -152,13 +250,20 @@ for( iter in 1:opt$niter ) {
 	prob.matrix = count.matrix / apply(count.matrix,1,sum)
 	seqLogo(t(prob.matrix))
 	if ( is.null(last.prob.matrix) ) {
-		last.prob.matrix = prob.matrix
+	last.prob.matrix = prob.matrix
 	} else if ( all(prob.matrix == last.prob.matrix) ) {
-		cat('bootstrap ppm converged!\n')
+		cat('bootstrap PPM converged!\n')
 		break
+	} else {
+		# mix the match-generated motif with the search motif
+		# how...?
+		# lets just try weighted average probabilities...
+		prob.matrix = (1-opt$mixture) * prob.matrix + opt$mixture * last.prob.matrix
 	}
-	mname = paste('BS',opt$motf,opt$seqf,iter,sep='.')
+
+	mname = sprintf('BS.%s.%s.%04d',opt$motf,opt$seqf,iter)
+	# write new bootstrap motif to file, updating 'mfile' in the process so that it is used next
 	mfile = write.MEME.motif(prob.matrix,bg.probs,mname)
 }
 
-if(opt$png) dev.off()
+if(opt$images) dev.off()

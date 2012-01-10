@@ -27,15 +27,13 @@ probeGaps = function(data)
 analMultiMatch = function(data,maxmatch=1)
 {
 	#blat data in R-readable form
-	f=factor(data$Qname)
+	f=factor(data$probe)
 	t=table(f)
-	print(paste('probes:',length(t)))
+	print( paste('probes:',length(t)) )
 	# number of probes matching multiple locations
-	print(paste('multimatched:',length(t[which(t>maxmatch)])))
+	print( paste('multimatched:',length(t[which(t>maxmatch)]) ) )
 	# plot matches per probe, ditributed by row order
 	plot(t)
 	# filter out mismatches
-	nr=t[which(t<=maxmatch)]
-	dnr=subset(data,Qname %in% rownames(nr))
-	return(dnr)
+	return( data[ data$probe %in% t[which(t<=maxmatch)], ] )
 }

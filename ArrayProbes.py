@@ -303,9 +303,11 @@ class BlatMatch:
 		return string.join([str(x) for x in [self.match,self.mismatch,self.repmatch,self.Ns,self.Qgapcount,self.Qgapbases,self.Tgapcount,self.Tgapbases,self.strand,self.Qname,self.Qsize,self.Qstart,self.Qend,self.Tname,self.Tsize,self.Tstart,self.Tend] ], self.sep )
 
 	def Rheader(self):
-		return string.join(['match','mismatch','repmatch','Ns','Qgapcount','Qgapbases','Tgapcount','Tgapbases','strand','Qname','Qsize','Qstart','Qend','Tname','Tsize','Tstart','Tend'],'\t')
+#		return string.join(['match','mismatch','repmatch','Ns','Qgapcount','Qgapbases','Tgapcount','Tgapbases','strand','Qname','Qsize','Qstart','Qend','Tname','Tsize','Tstart','Tend'],'\t')
+		return string.join(['probe','sequence','strand','start','end'],'\t')
 	def Routput(self):
-		return string.join([str(x) for x in [self.match,self.mismatch,self.repmatch,self.Ns,self.Qgapcount,self.Qgapbases,self.Tgapcount,self.Tgapbases,self.strand,self.Qname,self.Qsize,self.Qstart,self.Qend,self.Tname,self.Tsize,self.Tstart,self.Tend] ], '\t' )
+		#return string.join([str(x) for x in [self.match,self.mismatch,self.repmatch,self.Ns,self.Qgapcount,self.Qgapbases,self.Tgapcount,self.Tgapbases,self.strand,self.Qname,self.Qsize,self.Qstart,self.Qend,self.Tname,self.Tsize,self.Tstart,self.Tend] ], '\t' )
+		return string.join([str(x) for x in [self.Qname,self.Tname,self.strand,self.Tstart,self.Tend] ], '\t' )
 
 if __name__ == "__main__":
 	p=OptionParser()

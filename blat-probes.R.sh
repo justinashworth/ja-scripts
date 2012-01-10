@@ -1,27 +1,24 @@
 #!/bin/sh
-# $1 is
+# $1 is a file of BLAT results
 # $2 is a fasta file of appropriately named probe sequences
-# $3 is
+# $3 is an output prefix
 echo " \
 source('~/scripts/isb-scripts/blat-probes.R')
 d=read.delim('$1')
 png('$3.plots.%03d.png',width=800,height=800)
 
 # note redundant probes
-#probeseqs=read.delim('$2')
 require(Biostrings)
 probeseqs=read.DNAStringSet('$2')
-f=factor(probeseqs\$seq)
-t=table(f)
+t=table(as.character(probeseqs))
 redundant=t[which(t>1)]
-print(paste('rendundant probes:',length(redundant)))
+print(paste('redundant probes:',length(redundant)))
 
 dnr=analMultiMatch(d,1)
 write.table(dnr,'$3.nonred.dat',row.names=FALSE,quote=FALSE,sep='\t')
 
 # write list of filtered probes
-nr = probeseqs[ names(probeseqs) %in% dnr\$Qname ]
-#nr = subset(probeseqs,names %in% dnr\$Qname)
+nr = probeseqs[ names(probeseqs) %in% dnr\$probe ]
 write.table(nr,'$3.nr',row.names=FALSE,quote=FALSE,sep='\t')
 
 # compute and plot gaps resulting from filtering of redundant probes
