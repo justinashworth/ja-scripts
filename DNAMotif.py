@@ -57,6 +57,7 @@ class DNAMotif:
 			self.load_motif_simple(fname)
 
 	def load_motif_simple(self,fname,data_type):
+		sys.stderr.write('loading simple matrix from: %s as type: %s\n' %(fname,data_type) )
 		colnames = []
 		rownames = []
 		temp_matrix = []
@@ -72,7 +73,7 @@ class DNAMotif:
 			for i in range(len(fields)-1):
 				rowdict[colnames[i]] = float(fields[i+1])
 			temp_matrix.append(rowdict)
-#		print temp_matrix
+		#print temp_matrix
 		if data_type in self.matrix:
 			self.set_width(len(temp_matrix))
 			self.matrix[data_type] = temp_matrix

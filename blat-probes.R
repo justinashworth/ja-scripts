@@ -35,5 +35,5 @@ analMultiMatch = function(data,maxmatch=1)
 	# plot matches per probe, ditributed by row order
 	plot(t)
 	# filter out mismatches
-	return( data[ data$probe %in% t[which(t<=maxmatch)], ] )
+	return( data[ data$probe %in% names(t[t<=maxmatch]), ] )
 }

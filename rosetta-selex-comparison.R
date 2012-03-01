@@ -74,10 +74,13 @@ selex_motifs = grep('SELEX',rownames(dmats),value=1)
 selex_prefices = gsub('.SELEX','', selex_motifs )
 selex_set = c(selex_motifs,selex_prefices)
 
-main=paste('Motif distances\n','metric =',disfunc)
+dislab = disfunc
+if (dislab == 'ED') dislab = 'Euclidian Distance'
 
-cols=redblue(64)
-#cols=colorpanel(64,'black','gray','white')
+main=paste('Motif distances\n','metric =',dislab)
+
+#cols=redblue(64)
+cols=colorpanel(64,'black','gray','white')
 
 scale='none'
 #scale='row'
@@ -130,7 +133,16 @@ if(png){dev.off()}
 # heatmap of SELEX vs. Rosetta (excluding mutants at position 36)
 selex.v.rosetta = selex.v.rosetta[!grepl('36',rownames(selex.v.rosetta)),!grepl('36',colnames(selex.v.rosetta))]
 if(png){png('motif.distances.pred.vs.selex.png',width=800,height=800);par(oma=oma)}else{dev.new();par(oma=oma)}
-heatmap.2(selex.v.rosetta,symm=T,Rowv=0,Colv='Rowv',dendrogram='none',trace='none',scale=scale,main=main,col=cols,symbreaks=F,symkey=F,cellnote=round(selex.v.rosetta,2),notecol='white',notecex=1.3)
+heatmap.2(selex.v.rosetta,symm=T,Rowv=0,Colv='Rowv',dendrogram='none',trace='none',scale=scale,main=main,col=cols,symbreaks=F,symkey=F,cellnote=round(selex.v.rosetta,2),notecol='white',notecex=1.6,cexRow=2,cexCol=2,cex.main=2,key=FALSE)
+#mtext('in vitro expt',2,adj=-0.2,cex=3)
+if(png){dev.off()}
+
+# clean version (for figure to be labeled manually)
+rownames(selex.v.rosetta) = gsub( '.pred','',rownames(selex.v.rosetta) )
+colnames(selex.v.rosetta) = gsub( '.SELEX','',colnames(selex.v.rosetta) )
+if(png){png('motif.distances.pred.vs.selex.clean.png',width=800,height=800);par(oma=oma)}else{dev.new();par(oma=oma)}
+heatmap.2(selex.v.rosetta,symm=T,Rowv=0,Colv='Rowv',dendrogram='none',trace='none',scale=scale,main=main,col=cols,symbreaks=F,symkey=F,cexRow=3,cexCol=3,cex.main=3,key=FALSE,cellnote=round(selex.v.rosetta,2),notecol='cyan',notecex=3)
+#mtext('in vitro expt',2,adj=-0.2,cex=3)
 if(png){dev.off()}
 
 par=op

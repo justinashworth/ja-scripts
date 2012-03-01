@@ -67,16 +67,17 @@ info = read.delim('tps.all.models.ja.tsv')
 m=merge(means,info,by.x='geneid',by.y='gid')
 #m=merge(means,info,by.x='geneid',by.y='tag')
 
-m$desc=as.character(m$protein)
-m$name[grep('rnaseq|bd.',m$geneid)] = as.character(m$geneid[grep('rnaseq|bd.',m$geneid)])
-m$name[is.na(m$name)] = ''
-m$desc[m$name!='']=paste('(',m$name[m$name!=''],') ',m$desc[m$name!=''],sep='')
-
-m$desc[m$genome=='chloroplast']  = paste(m$desc[m$genome=='chloroplast'],' [chloroplast]',sep='')
-m$desc[m$genome=='mitochondria'] = paste(m$desc[m$genome=='mitochondria'],' [mitochondria]',sep='')
+#m$desc=as.character(m$protein)
+#m$name = as.character(m$name)
+##m$name[grep('rnaseq|bd.',m$geneid)] = as.character(m$geneid[grep('rnaseq|bd.',m$geneid)])
+#m$name[grep('rnaseq|bd.',m$tag)] = as.character(m$tag[grep('rnaseq|bd.',m$tag)])
+#m$name[is.na(m$name)] = ''
+#m$desc[m$name!='']=paste('(',m$name[m$name!=''],') ',m$desc[m$name!=''],sep='')
+#
+#m$desc[m$genome=='chloroplast']  = paste(m$desc[m$genome=='chloroplast'],' [chloroplast]',sep='')
+#m$desc[m$genome=='mitochondria'] = paste(m$desc[m$genome=='mitochondria'],' [mitochondria]',sep='')
 
 m=m[,c(which(!grepl(ratiocolregex,names(m))),grep(ratiocolregex,names(m)))]
 write.table(m,paste(fname,'mean.tsv',sep='.'),quote=F,row.names=F,sep='\t')
-mm=m[ ! is.na(m$protein), ]
-mm=mm[ mm$protein != 'hypothetical protein', ]
+mm=m[ !is.na(m$protein) & m$protein != 'hypothetical protein', ]
 write.table(mm,paste(fname,'mean.known.tsv',sep='.'),quote=F,row.names=F,sep='\t')

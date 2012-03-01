@@ -55,31 +55,31 @@ probe.lm.cont =
 }
 
 lm.co2 =
-	function(ratiosfile = 'probe.ratios.mean.tsv')
+	function(ratiosfile = 'probe.ratios.mean.tsv',unlog=FALSE,logbase=2)
 {
 	d = read.delim(ratiosfile)
 	ratiocols = grep( ratiocolregex, names(d), value=T )
-	ratios = as.matrix( d[ , ratiocols ] )
+	if (unlog) d[,ratiocols] = logbase^d[,ratiocols]
+	ratios = as.matrix( d[,ratiocols] )
 	colnames(ratios) = ratiocols
 	d = cbind( d, t( apply( ratios, 1, function(x) { probe.lm.cont(x,co2) } ) ) )
-	d$p.adj = p.adjust(d$pval)
+	d$p.adj = p.adjust(d$pval,'BH')
 	d = d[ order(d$pval), ]
 	d = d[ , c( which( !grepl(ratiocolregex,names(d)) ), grep(ratiocolregex,names(d)) ) ]
-	tsv( d, paste( gsub('.tsv','',ratiosfile), 'lmCO2.tsv', sep='.' ) )
+	tsv( d, paste( gsub('.tsv','',ratiosfile), 'lmCO3.tsv', sep='.' ) )
 	return(d)
 }
 
 plot.lm.co2 =
 	function(d)
 {
-#	d=read.delim('probe.ratios.mean.lmco2.tsv')
 	png('most.linear.with.co2.png',width=1000,height=1000)
 	par(mfrow=c(3,3))
 	par(cex=1.5)
 	par(cex.main=0.75)
-	source('lm.co2.R')
 	apply( d[ 1:9, c( which(names(d) == 'geneid'),which(names(d) == 'desc'), which(names(d) == 'p.adj'), grep(ratiocolregex,names(d) ) ) ], 1,
-		function(x) { probe.lm.cont( as.numeric(x[4:length(x)]), co2, plot=TRUE, xlab='[CO2] (uatm)', ylab='log2 change from Day 1',main=paste(x[1],x[2],paste('p.adj=',x[3],sep=''),sep='\n') ) } )
+#		function(x) { probe.lm.cont( as.numeric(x[4:length(x)]), co2, plot=TRUE, xlab='[CO2] (uatm)', ylab='log2 change from Day 1',main=paste(x[1],x[2],paste('p.adj=',x[3],sep=''),sep='\n') ) } )
+		function(x) { probe.lm.cont( as.numeric(x[4:length(x)]), co2, plot=TRUE, xlab='[CO2] (uatm)', ylab='fold change',main=paste(x[1],x[2],paste('p(BH)=',x[3],sep=''),sep='\n') ) } )
 	dev.off()
 
 	png('exp.vs.lmCO2.png',width=800,height=800)
