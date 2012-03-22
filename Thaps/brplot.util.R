@@ -50,6 +50,17 @@ delim.mean.sd =
 	return(c(mean(as.numeric(sp),na.rm=T),sd(as.numeric(sp),na.rm=T)))
 }
 
+growthrate.specific =
+	function(x,y)
+{
+	l=length(x)
+	if(l != length(y)){
+		cat('incompatible x and y vectors\n')
+		return()
+	}
+	return( log(y[2:l] / y[1:l-1]) / (x[2:l] - x[1:l-1]) )
+}
+
 growthrate =
 	function(x,y)
 {

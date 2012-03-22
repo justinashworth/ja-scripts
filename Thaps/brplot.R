@@ -3,58 +3,7 @@
 
 ### Data processing and plotting for manual and automatic measurements of Thalassiosira bioreactor culture
 
-dec.hours =
-	function(x)
-	# H:M:S to decimal hours
-{
-	s=strsplit(as.character(x),':')
-	as.numeric(s[[1]][1]) + as.numeric(s[[1]][2])/60 + as.numeric(s[[1]][3])/60/60
-}
-
-unfactor =
-	function(x){levels(x)[as.numeric(x)]}
-
-delim.expand =
-	function(x,y,delim=';')
-	# expand paired data in which y has multiple delimited values for individual x values
-	# works on (and filters/extends) a pair of corresponding vectors
-	# simplifies bookkeeping and data entry
-{
-	if(is.factor(x)){x=unfactor(x)}
-	if(is.factor(y)){y=unfactor(y)}
-	for(i in grep(delim,y)){
-		sp=unlist(strsplit(as.character(y[i]),delim))
-		for(s in sp){
-			#cat(x[i],s,'\n')
-			x=c(x,x[i])
-			y=c(y,s)
-		}
-	}
-	xy=cbind(x,y)
-	return(xy[!grepl(delim,y) & !y=="",])
-}
-
-delim.mean.sd =
-	function(x,delim=';')
-	# not vectorized: use an apply method
-{
-	sp=unlist(strsplit(as.character(x),delim))
-	return(c(mean(as.numeric(sp),na.rm=T),sd(as.numeric(sp),na.rm=T)))
-}
-
-growthrate =
-	function(x,y)
-{
-	l=length(x)
-	if(l != length(y)){
-		cat('incompatible x and y vectors\n')
-		return()
-	}
-	return((y[2:l]-y[1:l-1])/(x[2:l]-x[1:l-1]))
-}
-
-#doublingtime =
-#	log(2)/log(1+growthrate)
+source('brplot.util.R')
 
 ####################################################################################################
 
@@ -73,27 +22,68 @@ hours=sapply(manual$expt.time,dec.hours); manual$expt.time=hours; rm(hours)
 
 if(process_auto_time){
 	# convert to decimal hours (note: do only if necessary)
-#	hours=sapply(auto$LogTime,dec.hours); auto$LogTime=hours; rm(hours)
+	hours=sapply(auto$LogTime,dec.hours); auto$LogTime=hours; rm(hours)
 	# filter auto data (reduce sampling interval from 1 min to ~10)
 	auto=subset(auto,LogTime %% .17 < 0.02)
 	write.table(auto,'auto.processed.txt',quote=F,row.names=F,sep='\t')
 }
 
-maxhours=220
-maxhours=200
+series='400'
+series='800'
+
+if ( series == '400' ) {
+	maxhours=162
+	timesynch=-0.5
+	#main=expression(bolditalic('T. pseudonana')*' growth at 400 ppm '*CO[2])
+	main=expression('Diurnal growth at 400 ppm '*CO[2])
+} else {
+	maxhours=220
+	maxhours=200
+	timesynch=-39
+	#main=expression(bolditalic('T. pseudonana')*' growth at 800 ppm '*CO[2])
+	main=expression('Diurnal growth at 800 ppm '*CO[2])
+}
+
+mode='screen'
+mode='print'
+
+if(mode=='screen'){
+# for 'screen mode'
+lwd=3
+lty=2
+par(lwd=lwd,cex.axis=1.1,cex.main=1.5)
+par(mar=c(5,6,4,14))
+par(xaxs='i')
+cex.mtext=1.5
+cex.points=1
+}
+
+if(mode=='print'){
+# for 'print mode'
+# e.g. pdf('',width=21,height=16)
+lwd=6
+lty="31"
+par(lwd=lwd,cex.axis=2.2,cex.main=3)
+par(mar=c(8,10,6,20))
+par(xaxs='i')
+cex.mtext=3
+cex.points=1
+}
+
 # truncate logged data
 auto=subset(auto,LogTime<maxhours)
 
 # note: what are these magic numbers?
 #timesynch=75.3-99.1
-timesynch=-39
 
 # synchronize manual and auto data
 auto$LogTime=auto$LogTime + timesynch
 
 #xlim=c(min(manual$expt.time,auto$LogTime),max(manual$expt.time,auto$LogTime))
 #xlim=c(min(manual$expt.time,auto$LogTime),maxhours+timesynch)
-xlim=c(-15,maxhours+timesynch-18)
+#xlim=c(-10,maxhours+timesynch-18)
+#xlim=c(-10,136)
+xlim=c(0,136)
 #xlim=c(min(manual$expt.time,auto$LogTime),173.75+timesynch)
 
 ####################################################################################################
@@ -107,56 +97,55 @@ colors=list(
 	dO2='red',
 	flu='#006600',
 	flu.trans='#00660066',
-	PE='#00CC00',
-	PE.trans='#00CC0066',
+	PE='#660066',
+	PE.trans='#66006666',
 	Temp='magenta',
 	night='lightgray',
 	day='white',
-	PO4='orange',
+	PO4='darkorange',
 	SiO4='cyan',
 	NO3='purple',
 	NH4='darkblue'
 )
 
+pch = list(
+	SiO4=15,
+	NO3=20,
+	PO4=17,
+	NH4=18
+)
+
 nutrient_plot_factor=0.3
 
 ylims=list(
-	cells=c(-0.5,3.1),
+	cells=c(-1.38,3.2),
 	pH=c(6.4,9),
 #	dO2=c(0,6),
 	dO2=c(50,120),
 	flu=c(-5e3,0.9e4),
 	PE=c(-0.2,0.7),
 	Temp=c(12,36),
-	PO4=c(0,max( as.numeric(manual$PO4 ),na.rm=T )/nutrient_plot_factor),
-	SiO4=c(0,max(as.numeric(manual$SiO4),na.rm=T )/nutrient_plot_factor),
-	NO3=c(0,max( as.numeric(manual$NO3 ),na.rm=T )/nutrient_plot_factor),
-	NH4=c(0,max( as.numeric(manual$NH4 ),na.rm=T )/nutrient_plot_factor)
+	PO4=c(0,max( as.numeric(manual$PO4 ),na.rm=T)/nutrient_plot_factor),
+	SiO4=c(0,max(as.numeric(manual$SiO4),na.rm=T)/nutrient_plot_factor),
+	NO3=c(0,max( as.numeric(manual$NO3 ),na.rm=T)/nutrient_plot_factor),
+	NH4=c(0,max( as.numeric(manual$NH4 ),na.rm=T)/nutrient_plot_factor)
 )
 
-size='screen'
-size='print'
+axislims=list(
+	time=c(0,24,48,72,96,120),
+	cells=c(0,1,2,3),
+	pH=c(7.5,8.0,8.5),
+	dO2=c(80,90,100),
+	PE=c(0.3,0.45,0.6)
+)
 
-if(size=='screen'){
-# for 'screen size'
-lwd=3
-par(lwd=lwd,cex.axis=1.1,cex.main=2)
-par(mar=c(5,6,4,14))
-par(xaxs='i')
-cex.mtext=1.5
-cex.points=1
-}
-
-if(size=='print'){
-# for 'print size'
-# e.g. pdf('',width=21,height=16)
-lwd=6
-par(lwd=lwd,cex.axis=2.2,cex.main=4)
-par(mar=c(8,10,6,20))
-par(xaxs='i')
-cex.mtext=3
-cex.points=2
-}
+axislabs=list(
+	pH=c('7.5','pH','8.5'),
+	#dO2=c('80',expression(paste(dO[2],' (%)')),'100'),
+	dO2=c('80',expression(dO[2]),'100%'),
+	PE=c('0.3','PE','0.6'),
+	nuts=c('0%','50%','100%')
+)
 
 # expand delimited multiple values
 cells.vs.time=delim.expand(manual$expt.time,manual$cells...100.nL)
@@ -165,18 +154,17 @@ cells.vs.time[,2]=as.numeric(cells.vs.time[,2])/100
 # base plot window (cell count is left y-axis)
 #ylims$cells=as.numeric(c(min(cells.vs.time[,2],na.rm=T),as.numeric(max(cells.vs.time[,2],na.rm=T))+topinnermargin))
 #main=expression(paste(bolditalic('Thalassiosira'),' growth in elevated ',CO[2],' (800 ppm)'))
-main=expression(bolditalic('T. pseudonana')*' growth in elevated '*CO[2]*' (~800 ppm)')
-plot(cells.vs.time,xlim=xlim,ylim=ylims$cells,cex.lab=cex.mtext*1.33,main=main,xlab='',ylab='',type='n',yaxt='n',xaxp=c(0,140,7))
+plot(cells.vs.time,xlim=xlim,ylim=ylims$cells,cex.lab=cex.mtext*1.33,main=main,xlab='',ylab='',type='n',yaxt='n',xaxt='n')
+padj=0.8
+axis(1,axislims$time,cex=cex.mtext*1.4,lwd=lwd,padj=padj)
 line=3
-if(size=='print'){line=5}
-mtext('Time (h)',side=1,line=line,cex=cex.mtext*1.33)
+if(mode=='print'){line=5}
+mtext('Time (h)',side=1,line=line,cex=cex.mtext)
 
-axis(2,pretty(c(0,ylims$cells[2])),col=colors$cells,col.axis=colors$cells,lwd=lwd)
-abline(v=0,lty=2)
-text(4,2.5,'[inoculation]',cex=cex.mtext,srt=90)
+axis(2,axislims$cells,col=colors$cells,col.axis=colors$cells,lwd=lwd)
 line=3
-if(size=='print'){line=6}
-mtext(expression(10^6~'cells/mL'),side=2,line=line,col=colors$cells,cex=cex.mtext*1.33)
+if(mode=='print'){line=6}
+mtext(expression('cells/mL (x'*10^6*')'),adj=0.72,side=2,line=line,col=colors$cells,cex=cex.mtext*1.33)
 
 daynight=TRUE
 if(daynight){
@@ -217,10 +205,10 @@ cells.vs.time.avg=cbind(manual$expt.time,cells.vs.time.avg[,1]/100)
 colnames(cells.vs.time.avg)=c('time','cells')
 #cells.vs.time.avg=as.data.frame(na.exclude(cells.vs.time.avg))
 points(cells.vs.time.avg,pch=16,col=colors$cells.trans,cex=cex.points)
-#lines(lowess(na.exclude(cells.vs.time.avg),f=lowessf),lty=2,col=colors$cells)
-lines(lowess(na.exclude(cells.vs.time),f=lowessf),lty=2,col=colors$cells)
+#lines(lowess(na.exclude(cells.vs.time.avg),f=lowessf),lty=lty,col=colors$cells)
+lines(lowess(na.exclude(cells.vs.time),f=lowessf),lty=lty,col=colors$cells)
 # don't average?
-#lines(lowess(na.exclude(manual$cells...100.nL),f=0.5),lty=2,col=colors$cells)
+#lines(lowess(na.exclude(manual$cells...100.nL),f=0.5),lty=lty,col=colors$cells)
 #text(xlim[2],1.2,'cells',col=colors$cells)
 
 # pH
@@ -252,8 +240,8 @@ if(pHbaseline){
 	# starting media baseline
 	pHbasetime=c(-30,-25)
 	pHbaseline=mean(auto$pH[auto$LogTime>pHbasetime[1] & auto$LogTime<pHbasetime[2]])
-	#abline(h=pHbaseline+adj,col='gray',lty=2,lwd=2)
-	abline(h=pHbaseline*adj[2]+adj[1],col='gray',lty=2,lwd=2)
+	#abline(h=pHbaseline+adj,col='gray',lty=lty,lwd=2)
+	abline(h=pHbaseline*adj[2]+adj[1],col='gray',lty=lty,lwd=2)
 }
 
 # pH (mCP assay)
@@ -266,18 +254,18 @@ points(mCP.vs.time.avg,col=colors$pH.mCP,pch=8,cex=0.1)
 lines(auto$LogTime,sapply(auto$pH,function(x){adj[2]*x+adj[1]}),col=colors$pH)
 #points(manual$expt.time,manual$pH.probe+adj,col=colors$pH,pch=16)
 padj=NA
-if(size=='print'){padj=0.8}
+if(mode=='print'){padj=0.5}
 line=1
-if(size=='print'){line=2}
-axis(4,pretty(c(7.4,8.4)),lwd=lwd,padj=padj,line=line)
+if(mode=='print'){line=2}
+axis(4,axislims$pH,labels=axislabs$pH,lwd=lwd,line=line,padj=padj)
 line=2
-if(size=='print'){line=4}
-mtext('pH',side=4,line=line,at=8.6,cex=cex.mtext*1)
+if(mode=='print'){line=4}
+#mtext('pH',side=4,line=line,at=8.6,cex=cex.mtext*1)
 
 # dO2
-plot.dO2 = FALSE
-plot.dO2 = TRUE
-if ( plot.dO2 ) {
+plot.dO2=FALSE
+plot.dO2=TRUE
+if( plot.dO2 ){
 dO2.manual=FALSE
 if(dO2.manual){
 	# convert probe voltages to mg/L
@@ -314,11 +302,11 @@ lines(auto$LogTime,auto$dO2,col=colors$dO2)
 
 #points(manual$expt.time,manual$dO2,col=colors$dO2)
 line=4
-if(size=='print'){line=8}
-axis(4,pretty(c(85,100)),at=pretty(c(85,100)),labels=pretty(c(85,100)),line=line,col=colors$dO2,col.axis=colors$dO2,lwd=lwd,padj=padj)
-mtext(expression(paste(dO[2],' (%)')),4,adj=0.85,line=line+1,col=colors$dO2,cex=cex.mtext*0.8)
+if(mode=='print'){line=8}
+axis(4,axislims$dO2,labels=axislabs$dO2,line=line,col=colors$dO2,col.axis=colors$dO2,lwd=lwd,padj=padj)
+#mtext(expression(paste(dO[2],' (%)')),4,adj=0.9,line=line+1,col=colors$dO2,cex=cex.mtext*0.8)
 #mtext(expression(paste(dO[2],' (mg/L)')),4,adj=1,line=line,col=colors$dO2,cex=cex.mtext*0.8)
-} # plot dO2
+} # end if dO2
 
 # plot temperature
 plot_temp = FALSE
@@ -326,10 +314,10 @@ if ( plot_temp ) {
 par(new=T)
 plot(auto$LogTime,auto$Temp,xlim=xlim,ylim=ylims$Temp,ylab='',xlab='',col=colors$Temp,axes=F,type='l',bg='transparent')
 line=4
-if(size=='print'){line=8}
+if(mode=='print'){line=8}
 axis(4,pretty(c(18,22)),line=8,col=colors$Temp,col.axis=colors$Temp,lwd=lwd,padj=padj)
 line=7
-if(size=='print'){line=14}
+if(mode=='print'){line=14}
 mtext(expression(paste('Temp. (',{}^o,'C)')),4,line=line,at=20,col=colors$Temp,cex=cex.mtext)
 }
 
@@ -339,22 +327,23 @@ flu=t(sapply(manual$flu,delim.mean.sd))
 flu.vs.time=delim.expand(manual$expt.time,manual$flu)
 #plot(na.exclude(cbind(manual$expt.time,flu[,1])),xlim=xlim,ylim=ylims$flu,ylab='',xlab='',col=colors$flu.trans,axes=F,pch=16,bg='transparent')
 plot(flu.vs.time,xlim=xlim,ylim=ylims$flu,ylab='',xlab='',col=colors$flu.trans,axes=F,pch=16,cex=cex.points,bg='transparent')
-#lines(lowess(na.exclude(cbind(manual$expt.time,flu[,1])),f=lowessf),lty=2,col=colors$flu)
-lines(lowess(na.exclude(flu.vs.time),f=lowessf*0.8),lty=2,col=colors$flu)
-text(xlim[2]-30,max(na.exclude(flu)),'fluorescence',col=colors$flu,cex=cex.mtext)
+#lines(lowess(na.exclude(cbind(manual$expt.time,flu[,1])),f=lowessf),lty=lty,col=colors$flu)
+lines(lowess(na.exclude(flu.vs.time),f=lowessf*0.8),lty=lty,col=colors$flu)
+#text(xlim[2]-50,max(na.exclude(flu))+1000,'fluorescence',col=colors$flu,cex=cex.mtext)
 
 # plot photoefficiency
 dcmu=t(sapply(manual$dcmu,delim.mean.sd))
 manual$pe=(dcmu[,1]-flu[,1])/dcmu[,1]
+manual$pe[manual$pe < 0] = NA
 #manual$pe.sd=?
 par(new=T)
 line=7
-if(size=='print'){line=14}
+if(mode=='print'){line=14}
 #ylims$PE=c(0,max(manual$pe,na.rm=T))
 plot(na.exclude(cbind(manual$expt.time,manual$pe)),xlim=xlim,ylim=ylims$PE,ylab='',xlab='',col=colors$PE.trans,axes=F,pch=16,cex=cex.points,bg='transparent')
-lines(lowess(na.exclude(cbind(manual$expt.time,manual$pe)),f=lowessf*1),lty=2,col=colors$PE)
-axis(4,c(0.3,0.4,0.5,0.6),line=line,col=colors$PE,col.axis=colors$PE,lwd=lwd,padj=padj)
-mtext('PhotoEff.',4,adj=1.05,line=line+1,col=colors$PE,cex=cex.mtext*0.8)
+lines(lowess(na.exclude(cbind(manual$expt.time,manual$pe)),f=lowessf*1),lty=lty,col=colors$PE)
+axis(4,axislims$PE,labels=axislabs$PE,line=line,col=colors$PE,col.axis=colors$PE,lwd=lwd,padj=padj)
+#mtext('PhotoEff.',4,adj=1.05,line=line+1,col=colors$PE,cex=cex.mtext*0.8)
 
 # mark RNA sampling
 rna=subset(manual,RNA.mL.!="",select=c(expt.time,RNA.mL.))
@@ -362,71 +351,90 @@ if(!is.null(manual$RNA.arrays)){
 	rna=subset(manual,RNA.arrays!="",select=c(expt.time,RNA.arrays))
 }
 arrows.start=ylims$PE[2]*1.05
-arrows.end=ylims$PE[2]
-arrows(rna$expt.time,rep(arrows.start,nrow(rna)),rna$expt.time,rep(arrows.end,nrow(rna)),length=0.03*cex.mtext,lwd=cex.mtext)
+arrows.end=ylims$PE[2]*0.95
+arrows(rna$expt.time-1,rep(arrows.start,nrow(rna)),rna$expt.time-1,rep(arrows.end,nrow(rna)),length=0.05*cex.mtext,lwd=cex.mtext*1.5)
 line=-2
-if(size=='print'){line=-6}
-mtext('RNA sampled',3,line=line,cex=cex.mtext)
+if(mode=='print'){line=-6}
+#mtext('microarray samples',3,line=line,cex=cex.mtext)
 
 # note equilibration period
 line=-1
-if(size=='print'){line=-5}
-mtext('[equilibration]',line=line,side=2,cex=cex.mtext,adj=0.9)
+if(mode=='print'){line=-4}
+#mtext('[equilibration]',line=line,side=2,cex=cex.mtext,adj=0.98)
+#text(4,2.8,'[inoculation]',cex=cex.mtext,srt=90)
+#abline(v=0,lty=lty)
 
+nutrients=FALSE
 nutrients=TRUE
-#nutrients=FALSE
 if(nutrients){
-	# nutrients
-	trendlines=FALSE
-	trendlines=TRUE
-	trendf=0.1
-	legx=xlim[2]-15
+
+	# trim data (for editing pdfs later--extra points are still plotted, just masked--annoying extra points emerge in Illustrator when trying to copy a point symbol for manual legend)
+	manual = manual[ manual$expt.time <= xlim[2], ]
 
 	# plot PO4
 	par(new=T)
 	pcex=1
-	if(size=='print'){pcex=1.5}
-	plot(na.exclude(cbind(manual$expt.time,manual$PO4)),xlim=xlim,ylim=ylims$PO4,ylab='',xlab='',col=colors$PO4,axes=F,pch=16,bg='transparent',cex=pcex)
+	if(mode=='print'){pcex=1.5}
+	adj=1.5
+	cex.mtext=2.8
+
+	# nutrients
+	trendlines=FALSE
+#	trendlines=TRUE
+	trendf=0.1
+	legx=xlim[2]-15
+
+	plot(na.exclude(cbind(manual$expt.time,manual$PO4)),xlim=xlim,ylim=ylims$PO4,ylab='',xlab='',col=colors$PO4,axes=F,bg='transparent',cex=pcex*1.5,pch=pch$PO4)
 
 	maxnut = max(as.numeric(manual$PO4),na.rm=TRUE)
-	abline(h=maxnut,lty=2,lwd=lwd)
-	text(100,maxnut*0.9,'100%',cex=cex.mtext)
+	abline(h=maxnut,lty=2,lwd=lwd*0.7)
+#	text(100,maxnut*0.9,'100%',cex=cex.mtext)
 
-	if(trendlines){lines(lowess(na.exclude(cbind(manual$expt.time,manual$PO4)),f=trendf),lty=2,col=colors$PO4)}
-	nuttext = bquote( PO[4] (.(round(maxnut))) )
-	text(legx,ylims$PO4[2]*0.12, nuttext,col=colors$PO4,cex=cex.mtext)
+	if(trendlines){lines(lowess(na.exclude(cbind(manual$expt.time,manual$PO4)),f=trendf),lty=lty,col=colors$PO4)}
+#	nuttext = bquote( PO[4] (.(round(maxnut))) )
+	nuttext = bquote( PO[4] )
+	mtext(nuttext,1,line=-4,adj=adj,col=colors$PO4,cex=cex.mtext)
 	#axis(4,pretty(c(18,22)),line=3,col=colors$PO4,col.axis=colors$PO4,lwd=lwd)
 	#mtext(expression(micro~M),4,line=6,at=20,col=colors$PO4,cex=cex.mtext)
 
 	# plot SiO4
 	par(new=T)
-	plot(na.exclude(cbind(manual$expt.time,manual$SiO4)),xlim=xlim,ylim=ylims$SiO4,ylab='',xlab='',col=colors$SiO4,axes=F,pch=16,bg='transparent',cex=pcex)
-	if(trendlines){lines(lowess(na.exclude(cbind(manual$expt.time,manual$SiO4)),f=trendf),lty=2,col=colors$SiO4)}
+	plot(na.exclude(cbind(manual$expt.time,manual$SiO4)),xlim=xlim,ylim=ylims$SiO4,ylab='',xlab='',col=colors$SiO4,axes=F,pch=pch$SiO4,bg='transparent',cex=pcex*1.5)
+	if(trendlines){lines(lowess(na.exclude(cbind(manual$expt.time,manual$SiO4)),f=trendf),lty=lty,col=colors$SiO4)}
 	maxnut = max(as.numeric(manual$SiO4),na.rm=TRUE)
-	nuttext = bquote( SiO[4] (.(round(maxnut))) )
-	text(legx,ylims$SiO4[2]*0.18,nuttext,col=colors$SiO4,cex=cex.mtext)
+#	nuttext = bquote( SiO[4] (.(round(maxnut))) )
+	nuttext = bquote( SiO[4] )
+	mtext(nuttext,1,line=-8,adj=adj,col=colors$SiO4,cex=cex.mtext)
 	#axis(4,pretty(c(18,22)),line=3,col=colors$SiO4,col.axis=colors$SiO4,lwd=lwd)
 	#mtext(expression(micro~M),4,line=6,at=20,col=colors$SiO4,cex=cex.mtext)
 
 	# plot NO3
 	par(new=T)
-	plot(na.exclude(cbind(manual$expt.time,manual$NO3)),xlim=xlim,ylim=ylims$NO3,ylab='',xlab='',col=colors$NO3,axes=F,pch=16,bg='transparent',cex=pcex)
-	if(trendlines){lines(lowess(na.exclude(cbind(manual$expt.time,manual$NO3)),f=trendf),lty=2,col=colors$NO3)}
+	plot(na.exclude(cbind(manual$expt.time,manual$NO3)),xlim=xlim,ylim=ylims$NO3,ylab='',xlab='',col=colors$NO3,axes=F,pch=pch$NO3,bg='transparent',cex=pcex*1.5)
+	if(trendlines){lines(lowess(na.exclude(cbind(manual$expt.time,manual$NO3)),f=trendf),lty=lty,col=colors$NO3)}
+
 	maxnut = max(as.numeric(manual$NO3),na.rm=TRUE)
-	nuttext = bquote( NO[3] (.(round(maxnut))) )
-	text(legx,ylims$NO3[2]*0.24,nuttext,col=colors$NO3,cex=cex.mtext)
+	#nuttext = bquote( NO[3] (.(round(maxnut))) )
+	nuttext = bquote( NO[3] )
+	mtext(nuttext,1,line=-6,adj=adj,col=colors$NO3,cex=cex.mtext)
 	#axis(4,pretty(c(18,22)),line=3,col=colors$NO3,col.axis=colors$NO3,lwd=lwd)
 	#mtext(expression(micro~M),4,line=6,at=20,col=colors$NO3,cex=cex.mtext)
 
+	maxnit = max(as.numeric(manual$NO3 ),na.rm=T)
+#	axis(4,c(0,maxnit),at=seq(0,maxnit,maxnit/5),lwd=lwd,labels=seq(0,100,20))
+	axis(4,c(0,maxnit),at=c(0,maxnit/2,maxnit),lwd=lwd,labels=axislabs$nuts,cex=cex.mtext,tick=T,padj=padj)
+	mtext('nutrients',side=4,col='black',cex=cex.mtext,adj=0.05,line=4)
+
 	NH4=FALSE
+#	NH4=TRUE
 	if(NH4){
 	# plot NH4
 	par(new=T)
 	plot(na.exclude(cbind(manual$expt.time,manual$NH4)),xlim=xlim,ylim=ylims$NH4,ylab='',xlab='',col=colors$NH4,axes=F,pch=16,bg='transparent',cex=pcex)
-	if(trendlines){lines(lowess(na.exclude(cbind(manual$expt.time,manual$NH4)),f=trendf),lty=2,col=colors$NH4)}
+	if(trendlines){lines(lowess(na.exclude(cbind(manual$expt.time,manual$NH4)),f=trendf),lty=lty,col=colors$NH4)}
 	maxnut = max(as.numeric(manual$NH4),na.rm=TRUE)
 	nuttext = bquote( NH[4] (.(round(maxnut))) )
-	text(legx,ylims$NH4[2]*0.1,nuttext,col=colors$NH4,cex=cex.mtext)
+	mtext(nuttext,1,line=-2,adj=adj,col=colors$NH4,cex=cex.mtext)
 	#axis(4,pretty(c(18,22)),line=3,col=colors$NH4,col.axis=colors$NH4,lwd=lwd)
 	#mtext(expression(micro~M),4,line=6,at=20,col=colors$NH4,cex=cex.mtext)
 	}
