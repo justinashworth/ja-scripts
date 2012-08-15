@@ -490,6 +490,11 @@ class Chain:
 		for cp in sorted(self.residues):
 			seq.append( self.residues[cp].type )
 		return string.join( seq, '' )
+	def strdefs(self):
+		out = []
+		for cp in sorted(self.residues):
+			out.append( '%s.%i.%s' %(cp.chain, cp.pos, self.residues[cp]) )
+		return string.join(out, '\n') + '\n'
 	def __str__(self):
 		out = 'Chain %s: %s to %s\n' %(self.id, self.start(), self.end())
 		return out + self.seq()

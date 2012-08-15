@@ -112,8 +112,9 @@ opt = getopt(matrix(c(
 	'mixture'      , 'X', 1, 'double',
 	'bgfile'       , 'b', 1, 'character',
 	'regions'      , 'r', 1, 'character',
+	'genes'        , 'g', 1, 'character',
 	'pseudocounts' , 'p', 1, 'integer',
-	'images'       , 'g', 0, 'logical',
+	'images'       , 'i', 0, 'logical',
 	'help'         , 'h', 0, 'logical'
 ),ncol=4,byrow=T))
 
@@ -175,7 +176,6 @@ regions = NULL
 if( !is.null(opt$regions) ){
 	upstream=500
 	downstream=100
-#	coords=read.delim('halo.gene.coords.tsv')
 	coords=read.delim(opt$regions,as.is=T)
 	coords$Start = as.numeric(coords$Start)
 	coords$cis.start = 0
@@ -183,12 +183,20 @@ if( !is.null(opt$regions) ){
 	fwd = coords$Orientation == 'For'
 	coords$cis.start[fwd] = coords$Start[fwd] - upstream
 	coords$cis.end[fwd] = coords$Start[fwd] + downstream
-	# in halo gene coords, 'Start' (generally) refers to actual start (i.e. start > end)
+	# in halo gene coords, 'Start' (generally) refers to coordinate start (i.e. start > end: not 5' for reverse-strand genes)
 	rvs = coords$Orientation == 'Rev'
 	coords$cis.start[rvs] = coords$Start[rvs] + upstream
 	coords$cis.end[rvs] = coords$Start[rvs] - downstream
 	regions=coords[,names(coords) %in% c('canonical_Name','where','cis.start','cis.end')]
 	names(regions)=c('name','seq','start','end')
+}
+
+genes = NULL
+( !is.null(opt$genes) ){
+	genes = readLines(opt$genes)
+	cat('filtering regions down to ', length(genes), ' genes\n')
+	regions = regions[ region$name %in% genes, ]
+	cat('there are now ', nrow(regions), ' regions\n')
 }
 
 filter.hits.by.regions =

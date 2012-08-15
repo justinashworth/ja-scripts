@@ -60,13 +60,13 @@ cex.points=1
 
 if(mode=='print'){
 # for 'print mode'
-# e.g. pdf('',width=21,height=16)
+# e.g. pdf('',width=11,height=8)
 lwd=6
 lty="31"
 par(lwd=lwd,cex.axis=2.2,cex.main=3)
 par(mar=c(8,10,6,20))
 par(xaxs='i')
-cex.mtext=3
+cex.mtext=2.5
 cex.points=1
 }
 
@@ -118,11 +118,13 @@ pch = list(
 nutrient_plot_factor=0.3
 
 ylims=list(
-	cells=c(-1.38,3.2),
+#	cells=c(-1.38,3.2),
+	cells=c(3.8,7),
 	pH=c(6.4,9),
 #	dO2=c(0,6),
 	dO2=c(50,120),
-	flu=c(-5e3,0.9e4),
+#	flu=c(-5e3,0.9e4),
+	flu=c(1,4.2),
 	PE=c(-0.2,0.7),
 	Temp=c(12,36),
 	PO4=c(0,max( as.numeric(manual$PO4 ),na.rm=T)/nutrient_plot_factor),
@@ -133,13 +135,17 @@ ylims=list(
 
 axislims=list(
 	time=c(0,24,48,72,96,120),
-	cells=c(0,1,2,3),
+#	cells=c(0,1,2,3),
+	cells=c(5,6,7),
+	flu=c(2,3,4),
 	pH=c(7.5,8.0,8.5),
 	dO2=c(80,90,100),
 	PE=c(0.3,0.45,0.6)
 )
 
 axislabs=list(
+	cells=c(expression(10^5),expression(10^6),expression(10^7)),
+	flu=c(expression(10^2),expression(10^3),expression(10^4)),
 	pH=c('7.5','pH','8.5'),
 	#dO2=c('80',expression(paste(dO[2],' (%)')),'100'),
 	dO2=c('80',expression(dO[2]),'100%'),
@@ -149,22 +155,29 @@ axislabs=list(
 
 # expand delimited multiple values
 cells.vs.time=delim.expand(manual$expt.time,manual$cells...100.nL)
+cells.vs.time=as.data.frame(cells.vs.time)
+cells.vs.time[,1] = as.numeric(unfactor(cells.vs.time[,1]))
+cells.vs.time[,2] = as.numeric(unfactor(cells.vs.time[,2]))*10000
+
 # convert cells/100nL to 10^6 cells/mL
-cells.vs.time[,2]=as.numeric(cells.vs.time[,2])/100
+#cells.vs.time[,2]=as.numeric(cells.vs.time[,2])/100
+
 # base plot window (cell count is left y-axis)
 #ylims$cells=as.numeric(c(min(cells.vs.time[,2],na.rm=T),as.numeric(max(cells.vs.time[,2],na.rm=T))+topinnermargin))
 #main=expression(paste(bolditalic('Thalassiosira'),' growth in elevated ',CO[2],' (800 ppm)'))
-plot(cells.vs.time,xlim=xlim,ylim=ylims$cells,cex.lab=cex.mtext*1.33,main=main,xlab='',ylab='',type='n',yaxt='n',xaxt='n')
+
+plot(cells.vs.time,xlim=xlim,ylim=ylims$cells,main=main,xlab='',ylab='',type='n',yaxt='n',xaxt='n')
 padj=0.8
 axis(1,axislims$time,cex=cex.mtext*1.4,lwd=lwd,padj=padj)
 line=3
 if(mode=='print'){line=5}
 mtext('Time (h)',side=1,line=line,cex=cex.mtext)
 
-axis(2,axislims$cells,col=colors$cells,col.axis=colors$cells,lwd=lwd)
+axis(2,axislims$cells,labels=axislabs$cells,col=colors$cells,col.axis=colors$cells,lwd=lwd)
 line=3
 if(mode=='print'){line=6}
-mtext(expression('cells/mL (x'*10^6*')'),adj=0.72,side=2,line=line,col=colors$cells,cex=cex.mtext*1.33)
+#mtext(expression('cells/mL (x'*10^6*')'),adj=0.72,side=2,line=line,col=colors$cells,cex=cex.mtext*1.33)
+mtext('cells/mL',adj=0,side=2,line=1,col=colors$cells,cex=cex.mtext)
 
 daynight=TRUE
 if(daynight){
@@ -192,7 +205,7 @@ if(daynight){
 	tcor=0.7
 	lightson=lightson+tcor
 	lightsout=lightsout+tcor
-	rect(lightsout,rep(ylims$cells[1]-0.1,length(lightsout)),lightson,rep(ylims$cells[2]+0.1,length(lightson)),col=colors$night,lty=0)
+	rect(lightsout,rep(ylims$cells[1]-0.4,length(lightsout)),lightson,rep(ylims$cells[2]+0.4,length(lightson)),col=colors$night,lty=0)
 }
 
 lowessf=0.1
@@ -201,12 +214,21 @@ lowessf=0.1
 #points(cells.vs.time,pch=16,col=colors$cells)
 # plot average trace
 cells.vs.time.avg=t(sapply(manual$cells...100.nL,delim.mean.sd))
-cells.vs.time.avg=cbind(manual$expt.time,cells.vs.time.avg[,1]/100)
+#cells.vs.time.avg=cbind(manual$expt.time,cells.vs.time.avg[,1]/100)
+cells.vs.time.avg=cbind(manual$expt.time,cells.vs.time.avg[,1]*10000)
 colnames(cells.vs.time.avg)=c('time','cells')
+
+cells.vs.time.avg = as.data.frame(cells.vs.time.avg)
+cells.vs.time.avg[,2] = as.numeric(cells.vs.time.avg[,2])
+logb = 10
+cells.vs.time.avg[,2] = log(cells.vs.time.avg[,2], logb)
+
 #cells.vs.time.avg=as.data.frame(na.exclude(cells.vs.time.avg))
 points(cells.vs.time.avg,pch=16,col=colors$cells.trans,cex=cex.points)
-#lines(lowess(na.exclude(cells.vs.time.avg),f=lowessf),lty=lty,col=colors$cells)
-lines(lowess(na.exclude(cells.vs.time),f=lowessf),lty=lty,col=colors$cells)
+
+#cells.vs.time[,2] = log(cells.vs.time[,2], logb)
+fitline = lowess(na.exclude(cells.vs.time),f=lowessf)
+lines(fitline$x, log(fitline$y,logb), lty=lty,col=colors$cells)
 # don't average?
 #lines(lowess(na.exclude(manual$cells...100.nL),f=0.5),lty=lty,col=colors$cells)
 #text(xlim[2],1.2,'cells',col=colors$cells)
@@ -256,10 +278,10 @@ lines(auto$LogTime,sapply(auto$pH,function(x){adj[2]*x+adj[1]}),col=colors$pH)
 padj=NA
 if(mode=='print'){padj=0.5}
 line=1
-if(mode=='print'){line=2}
+if(mode=='print'){line=5}
 axis(4,axislims$pH,labels=axislabs$pH,lwd=lwd,line=line,padj=padj)
-line=2
-if(mode=='print'){line=4}
+line=4
+if(mode=='print'){line=7}
 #mtext('pH',side=4,line=line,at=8.6,cex=cex.mtext*1)
 
 # dO2
@@ -302,7 +324,7 @@ lines(auto$LogTime,auto$dO2,col=colors$dO2)
 
 #points(manual$expt.time,manual$dO2,col=colors$dO2)
 line=4
-if(mode=='print'){line=8}
+if(mode=='print'){line=9}
 axis(4,axislims$dO2,labels=axislabs$dO2,line=line,col=colors$dO2,col.axis=colors$dO2,lwd=lwd,padj=padj)
 #mtext(expression(paste(dO[2],' (%)')),4,adj=0.9,line=line+1,col=colors$dO2,cex=cex.mtext*0.8)
 #mtext(expression(paste(dO[2],' (mg/L)')),4,adj=1,line=line,col=colors$dO2,cex=cex.mtext*0.8)
@@ -325,11 +347,18 @@ mtext(expression(paste('Temp. (',{}^o,'C)')),4,line=line,at=20,col=colors$Temp,c
 par(new=T)
 flu=t(sapply(manual$flu,delim.mean.sd))
 flu.vs.time=delim.expand(manual$expt.time,manual$flu)
-#plot(na.exclude(cbind(manual$expt.time,flu[,1])),xlim=xlim,ylim=ylims$flu,ylab='',xlab='',col=colors$flu.trans,axes=F,pch=16,bg='transparent')
+
+flu.vs.time = as.data.frame(flu.vs.time)
+flu.vs.time[,1] = as.numeric(unfactor(flu.vs.time[,1]))
+flu.vs.time[,2] = log(as.numeric(unfactor(flu.vs.time[,2])), logb)
+
 plot(flu.vs.time,xlim=xlim,ylim=ylims$flu,ylab='',xlab='',col=colors$flu.trans,axes=F,pch=16,cex=cex.points,bg='transparent')
 #lines(lowess(na.exclude(cbind(manual$expt.time,flu[,1])),f=lowessf),lty=lty,col=colors$flu)
 lines(lowess(na.exclude(flu.vs.time),f=lowessf*0.8),lty=lty,col=colors$flu)
 #text(xlim[2]-50,max(na.exclude(flu))+1000,'fluorescence',col=colors$flu,cex=cex.mtext)
+line = 4
+axis(2,axislims$flu,labels=axislabs$flu,col=colors$flu,col.axis=colors$flu,lwd=lwd,line=line)
+mtext('fluorescence',adj=-0.2,side=2,line=line+1,col=colors$flu,cex=cex.mtext*0.8)
 
 # plot photoefficiency
 dcmu=t(sapply(manual$dcmu,delim.mean.sd))
@@ -338,7 +367,7 @@ manual$pe[manual$pe < 0] = NA
 #manual$pe.sd=?
 par(new=T)
 line=7
-if(mode=='print'){line=14}
+if(mode=='print'){line=1}
 #ylims$PE=c(0,max(manual$pe,na.rm=T))
 plot(na.exclude(cbind(manual$expt.time,manual$pe)),xlim=xlim,ylim=ylims$PE,ylab='',xlab='',col=colors$PE.trans,axes=F,pch=16,cex=cex.points,bg='transparent')
 lines(lowess(na.exclude(cbind(manual$expt.time,manual$pe)),f=lowessf*1),lty=lty,col=colors$PE)
@@ -376,7 +405,7 @@ if(nutrients){
 	pcex=1
 	if(mode=='print'){pcex=1.5}
 	adj=1.5
-	cex.mtext=2.8
+	cex.mtext=2
 
 	# nutrients
 	trendlines=FALSE

@@ -1,6 +1,6 @@
-multifile = 0
-separate_files = 1
-processfiles = multifile || separate_files
+multifile = FALSE
+separate_files = TRUE
+processfiles = multifile | separate_files
 
 process.multifile =
 	function(file)
@@ -52,36 +52,98 @@ process.separate_files =
 	return(h)
 }
 
-# promoter regions
+# regions to annotate
 if(!exists('regions')){
-	upstream=500
-	downstream=100
-	coords=read.delim('halo.gene.coords.tsv')
-	coords$Start = as.numeric(coords$Start)
+	upstream=200
+	downstream=200
+	coords=read.delim('TSS-TTS.txt')
+	coords$TSS = as.numeric(coords$TSS)
 	coords$cis.start = 0
 	coords$cis.end = 0
-	fwd = coords$Orientation == 'For'
-	coords$cis.start[fwd] = coords$Start[fwd] - upstream
-	coords$cis.end[fwd] = coords$Start[fwd] + downstream
-	# in halo gene coords, 'Start' (generally) refers to actual start (i.e. start > end)
-	rvs = coords$Orientation == 'Rev'
-	coords$cis.start[rvs] = coords$Start[rvs] + upstream
-	coords$cis.end[rvs] = coords$Start[rvs] - downstream
-	regions=coords[,names(coords) %in% c('canonical_Name','where','cis.start','cis.end')]
-	names(regions)=c('name','seq','start','end')
+	fwd = coords$Strand == 'For'
+	coords$cis.start[fwd] = coords$TSS[fwd] - upstream
+	coords$cis.end[fwd] = coords$TSS[fwd] + downstream
+	rvs = coords$Strand == 'Rev'
+	coords$cis.start[rvs] = coords$TSS[rvs] + upstream
+	coords$cis.end[rvs] = coords$TSS[rvs] - downstream
+	regions=coords[,names(coords) %in% c('Chr','Name','cis.start','cis.end')]
+	names(regions)=c('seq','name','start','end')
+	# filter out rows with NAs
+	hasna = apply(regions, 1, function(x){ any(is.na(x)) } )
+	regions = regions[ !hasna, ]
 }
 
-annotate.promoters =
+annotate.regions =
+	# note: does not separate out sequence contigs
 	function(posns,regns)
 {
 	return( sapply(posns,
 		function(x){
-			regns.contain = regns$start <= x & regns$end >= x
-			if(length(which(regns.contain))==0){regns.contain=NA}
+			regns.contain = as.numeric(regns$start) <= x & as.numeric(regns$end) >= x
+			if(all(! which(regns.contain))){regns.contain=NA}
 			else{regns.contain=paste(regns$name[regns.contain],sep=',',collapse=',')}
 			return(regns.contain)
 		}
 	))
+}
+
+gene.hit.table =
+	# table: rows: regions, cols: motifs, value: region contains motif hit
+	function(posns, regns)
+{
+	motifs = levels(factor(posns$motif))
+	nmotifs = length(motifs)
+	gene.hits = matrix(FALSE, nrow=nrow(regns), ncol=nmotifs, dimnames=list(regns$name,motifs))
+	contigs = levels(factor(regns$seq))
+	for(i in 1:nmotifs){
+		motif = motifs[i]
+		cat(motif,'\n')
+		hits = posns[ posns$motif == motif, ]
+		for(contig in contigs){
+			cat(contig, '\n')
+			incontig = as.character(hits$sequence_name) == contig
+			cat(length(which(incontig)), 'in contig\n')
+			hitpos = (hits$hit_start[incontig] + hits$hit_end[incontig])/2
+			contighits =
+				sapply(1:nrow(regns), function(x){
+					regn = regns[x,]
+					return( regn$seq==contig & any(as.numeric(hitpos) >= regn$start & as.numeric(hitpos) <= regn$end) )
+				})
+			cat(length(which(contighits)), 'hits\n')
+			gene.hits[,i] = gene.hits[,i] | contighits
+		}
+	}
+	return(gene.hits)
+}
+
+gene.hit.list =
+	# list of lists: motifs->hits
+	function(posns, regns)
+{
+	motifs = levels(factor(posns$motif))
+	nmotifs = length(motifs)
+	contigs = levels(factor(regns$seq))
+	gene.hits = list()
+	for(i in 1:nmotifs){
+		motif = motifs[i]
+		cat(motif,'\n')
+		hits = posns[ posns$motif == motif, ]
+		gene.hits[[motif]] = c()
+		for(contig in contigs){
+			cat(contig, '\n')
+			incontig = as.character(hits$sequence_name) == contig
+			cat(length(which(incontig)), 'in contig\n')
+			hitpos = (hits$hit_start[incontig] + hits$hit_end[incontig])/2
+			contighits =
+				sapply(1:nrow(regns), function(x){
+					regn = regns[x,]
+					return( regn$seq==contig & any(as.numeric(hitpos) >= regn$start & as.numeric(hitpos) <= regn$end) )
+				})
+			genes = as.character(regns$name[contighits])
+			gene.hits[[motif]] = unique( c(gene.hits[[motif]], genes) )
+		}
+	}
+	return(gene.hits)
 }
 
 h = NULL
@@ -98,7 +160,13 @@ if (processfiles) {
 	# rearrange columns
 	# should yield:sequence_name	motif	dir	hit_start	hit_end	score	hit_p.value
 	h = h[,c(1,2,7,3,4,5,6)]
-	h$promoters = annotate.promoters((h[,4]+h[,5])/2,regions)
+
+#	h$regions = annotate.regions((h[,4]+h[,5])/2,regions)
+
+#	gene.hits = gene.hit.table(h, regions)
+#	write.table(gene.hits,'gene.hits.tab',quote=F,sep='\t')
+
+	gene.hit.list = gene.hit.list(h, regions)
 
 	# write file
 	write.table(h,'hitsflat.tsv',quote=F,row.names=F,sep='\t')
@@ -110,8 +178,13 @@ if (processfiles) {
 }
 
 # ANALYSIS/PLOTTING/OUTPUT
-quit('no')
-png=1
+plots = FALSE
+#plots = TRUE
+
+if(plots){
+
+png=FALSE
+#png=TRUE
 
 motifs = levels(factor(h$motif))
 # filter down to Halo
@@ -135,21 +208,22 @@ p.val = 1e-5
 counts=table(h$in.region,h$motif)
 counts2=counts[,order(counts[2,],decreasing=T)]
 
-if(png){png('motif.hits.in.promoters.png',w=640,h=640)}
+if(png){png('motif.hits.in.regions.png',w=640,h=640)}
 par(mar=c(10,10,10,6))
-barplot(counts2,las=2,legend=c('not promoter','promoter region'),col=c('darkblue','red'),ylab='number of motif hits',main='rosetta motif hits in Halo promoters')
+barplot(counts2,las=2,legend=c('not in region','in region'),col=c('darkblue','red'),ylab='number of motif hits',main='rosetta motif hits in Halo regions')
 if(png){dev.off()}
 
 p.enrich=counts2[2,]/(counts[1,]+counts2[2,])
 p.enrich=sort(p.enrich,decreas=T)
 
-if(png){png('motif.hits.in.promoters.fraction.png',w=640,h=640)}
+if(png){png('motif.hits.in.regions.fraction.png',w=640,h=640)}
 par(mar=c(10,10,10,6))
-barplot(p.enrich,las=2,ylab='fraction of motif hits',main='fraction of rosetta motif hits in Halo promoter regions\n(fraction of all genome hits per TF)')
+barplot(p.enrich,las=2,ylab='fraction of motif hits',main='fraction of rosetta motif hits in Halo regions\n(fraction of all genome hits per TF)')
 if(png){dev.off()}
 
-if(png){png('motif.hits.in.promoters.p.values.png',w=640,h=640)}
+if(png){png('motif.hits.in.regions.p.values.png',w=640,h=640)}
 par(mar=c(10,10,10,6))
 cols=c('darkblue','red')
-boxplot(log(h$hit_p.value,10) ~ h$in.region * h$motif,las=2,col=cols,outcol=cols,outpch=21,legend=c('not promoter','promoter'), horizontal=T,main='p-values for motifs in promoters vs. not in promoters')
+boxplot(log(h$hit_p.value,10) ~ h$in.region * h$motif,las=2,col=cols,outcol=cols,outpch=21,legend=c('not in region','in region'), horizontal=T,main='p-values for motifs in regions vs. not in regions')
 if(png){dev.off()}
+} # plots

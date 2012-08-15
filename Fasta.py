@@ -341,6 +341,13 @@ class FastaSeqs:
 	def summarize(self):
 		return string.join([ self.seqs[key].summarize() for key in self.order], '\n' )
 
+	def named_list(self):
+		seqs = []
+		for key in self.order:
+			seq = self.seqs[key]
+			seqs.append( (key,seq) )
+		return seqs
+
 	def simple_list(self):
 		seqs = []
 		for s in self.seqs.values():

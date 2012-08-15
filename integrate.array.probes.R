@@ -7,9 +7,9 @@
 #fname='ratios.manual'
 #fname='probe.ratios.tsv'
 #fname='probe.ratios'
-fname='limma.norm.ratios'
+fname='probe.ratios'
 cat('reading probe values...\n')
-probe.values=read.delim(fname)
+probe.values=read.delim(fname,as.is=T)
 
 #values$probe=values$GENE
 #values$GENE=NULL
@@ -34,7 +34,7 @@ probe.mapping=probe.mapping[,c('probe','geneid')]
 
 cat('merging probe values and mapping...\n')
 mapped=merge(probe.values,probe.mapping,by=c('probe'))
-ratiocolregex='ref|Day'
+ratiocolregex='ref|Day|ratio|log'
 #ratiocolregex='CO2'
 # slice down to geneid and values
 mapped=mapped[ , c( which(names(mapped)=='geneid'), grep(ratiocolregex,names(mapped)) ) ]
@@ -60,12 +60,12 @@ means$geneid = levels(genes)
 #broadcast(mat[,c(1:6)],"Thaps")
 #broadcast(mat,"Thaps")
 
-info = read.delim('tps.all.models.ja.tsv')
+info = read.delim('tps.all.models.ja.tsv',as.is=T)
 #info$id=as.character(info$gid)
 #info$id[!info$genome %in% c('chloroplast','mitochondria')]=as.character(info$tag[!info$genome %in% c('chloroplast','mitochondria')])
 #info$id=gsub('THAPSDRAFT_','',info$id)
-m=merge(means,info,by.x='geneid',by.y='gid')
-#m=merge(means,info,by.x='geneid',by.y='tag')
+#m=merge(means,info,by.x='geneid',by.y='gid')
+m=merge(means,info,by.x='geneid',by.y='tag')
 
 #m$desc=as.character(m$protein)
 #m$name = as.character(m$name)
@@ -75,7 +75,7 @@ m=merge(means,info,by.x='geneid',by.y='gid')
 #m$desc[m$name!='']=paste('(',m$name[m$name!=''],') ',m$desc[m$name!=''],sep='')
 #
 #m$desc[m$genome=='chloroplast']  = paste(m$desc[m$genome=='chloroplast'],' [chloroplast]',sep='')
-#m$desc[m$genome=='mitochondria'] = paste(m$desc[m$genome=='mitochondria'],' [mitochondria]',sep='')
+m$desc[m$genome=='mitochondria'] = paste(m$desc[m$genome=='mitochondria'],' [mitochondria]',sep='')
 
 m=m[,c(which(!grepl(ratiocolregex,names(m))),grep(ratiocolregex,names(m)))]
 write.table(m,paste(fname,'mean.tsv',sep='.'),quote=F,row.names=F,sep='\t')

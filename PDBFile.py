@@ -22,7 +22,7 @@ class PDBFile:
 
 	def residue(self,chain,pos):
 		if not self.has_residue(chain,pos):
-			print 'warning, no chain %s pos %s in pdb' %(chain,pos)
+			sys.stderr.write( 'warning, no chain %s pos %s in pdb\n' %(chain,pos) )
 			return
 		return self.residues[ChainPos(chain,pos)]
 
@@ -37,7 +37,7 @@ class PDBFile:
 			pdb = os.popen( 'gunzip -c %s' % filename )
 		else: pdb = file( filename, 'r' )
 
-		print 'reading %s' % filename
+		#print 'reading %s' % filename
 		curr_chainpos = ChainPos('-',0)
 		for line in pdb:
 			if line.startswith('ATOM'):
@@ -135,6 +135,9 @@ class RosettaPDBFile(PDBFile):
 	def line_to_energy(self,line):
 		for field in line.split():
 			if re.match( '^[0-9.-]+$', field ): self.E['energy'] = float(field)
+	def line_to_pro_close(self,line):
+		for field in line.split():
+			if re.match( '^[0-9.-]+$', field ): self.E['pro_close'] = float(field)
 	def line_to_binding(self,line): self.E['binding'] = float(line.strip().split(':')[-1])
 	def line_to_Fitness(self,line): self.E['Fitness'] = float(line.strip().split(':')[-1])
 	def line_to_base_spec(self,line): self.E['base-spec'] = float(line.split()[3])
@@ -150,7 +153,7 @@ class RosettaPDBFile(PDBFile):
 			if len(i) < 2: continue
 			chainpos = ChainPos(i[1],i[0])
 			if self.residues.has_key(chainpos): self.residues[chainpos].behavior.append( type )
-			else: print 'Warning, %s residue %s not found in pdb!' % ( type, chainpos )
+			else: sys.stderr.write( 'Warning, %s residue %s not found in pdb!\n' % ( type, chainpos ) )
 
 	def read_pdb( self, filename, readcoords, match_list ):
 
@@ -158,12 +161,13 @@ class RosettaPDBFile(PDBFile):
 		re_base_atom = re.compile('^ATOM.+ CA |^ATOM.+ C1[*\'] ')
 
 		match_fxns = {
-			'molten' : ( re.compile( 'PackingRes|DesignRes|MutatedRes|MovedRes|MutatedDNA|MovedDNA|DNAdesRes' ), self.line_to_molten ),
-			'energy' : ( re.compile( 'bk_tot|total_score' ), self.line_to_energy ),
-			'binding' : ( re.compile( 'Binding' ), self.line_to_binding ),
-			'Fitness' : ( re.compile( 'Fitness' ), self.line_to_Fitness ),
-			'base-spec' : ( re.compile( 'base-spec' ), self.line_to_base_spec ),
-			'chi_offset' : ( re.compile( 'chi_offset' ), self.line_to_chi_offset ),
+			'molten' : ( re.compile('PackingRes|DesignRes|MutatedRes|MovedRes|MutatedDNA|MovedDNA|DNAdesRes'), self.line_to_molten ),
+			'energy' : ( re.compile('bk_tot|total_score'), self.line_to_energy ),
+			'pro_close' : ( re.compile('pro_close'), self.line_to_pro_close ),
+			'binding' : ( re.compile('Binding'), self.line_to_binding ),
+			'Fitness' : ( re.compile('Fitness'), self.line_to_Fitness ),
+			'base-spec' : ( re.compile('base-spec'), self.line_to_base_spec ),
+			'chi_offset' : ( re.compile('chi_offset'), self.line_to_chi_offset ),
 		}
 
 		pdb = None
@@ -171,7 +175,7 @@ class RosettaPDBFile(PDBFile):
 			pdb = os.popen( 'gunzip -c %s' % filename )
 		else: pdb = file( filename, 'r' )
 
-		print 'reading %s' % filename
+		#print 'reading %s' % filename
 		curr_chainpos = ChainPos('-',0)
 		molten_lines = []
 		for line in pdb:
@@ -196,4 +200,4 @@ class RosettaPDBFile(PDBFile):
 ### end of RosettaPDBFile class
 
 if __name__ == '__main__':
-	print 'Python class library--no standalone implementation'
+	sys.stderr.write( 'Python class library--no standalone implementation\n' )

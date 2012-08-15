@@ -2,7 +2,7 @@
 
 import os,sys,re,string
 import logging
-from AshworthUtil import rosetta_filename
+from AshworthUtil import get_oneletter
 from optparse import OptionParser
 import cPickle as pickle
 from PositionSubstitution import *
@@ -16,6 +16,7 @@ p.add_option('-k','--pickle')
 opt,args = p.parse_args()
 
 re_substitution_new = re.compile( '.*Scores for mutation to ([a-zA-Z]+) at ([\.A-Z0-9]+)\.([a-zA-Z]+): bound = ([\-.0-9]+) .+ binding = ([\-.0-9]+) .+ specificity.bound = ([\-.0-9]+) .+ specificity.binding = ([\-.0-9]+)' )
+re_subs_2012 = re.compile( '.*Scores for sequence state [A-Z]\.[0-9]+.([a-zA-Z]+) at ([A-Z])\.([0-9]+).([a-zA-Z]+): bound = ([\-.0-9]+) .+ binding = ([\-.0-9]+) .+ specificity.bound = ([\-.0-9]+) .+ specificity.binding = ([\-.0-9]+)' )
 # Scanning protein positions that interface with DNA position(s) CHAIN.###.TYPE
 re_scandna = re.compile('Scanning protein positions that interface with DNA position\(s\) ([A-Z]).([0-9]+).([a-zA-Z0-9]+)')
 
@@ -54,11 +55,17 @@ def parse_outfiles(pathfile):
 
 		for line in open(path):
 			line = line.strip()
-			match = re_substitution_new.match(line)
-			if match != None:
-				aa, chainpos, nataa, bound, binding, specbound, specbinding = match.groups()
+			#match = re_substitution_new.match(line)
+			#if match:
+			#	aa, chainpos, nataa, bound, binding, specbound, specbinding = match.groups()
+			match = re_subs_2012.match(line)
+			if match:
+				aa, chain, pos, nataa, bound, binding, specbound, specbinding = match.groups()
+				aa = get_oneletter(aa)
+				nataa = get_oneletter(nataa)
 				if debugoutput:
-					print aa, chainpos, nataa
+					print aa, chain, pos, nataa
+				chainpos = '%s.%s' %(chain,pos)
 				if not complexes[ complex ][ DNApos ].has_key(chainpos):
 					complexes[ complex ][ DNApos ][ chainpos ] = Position(nataa)
 
@@ -72,8 +79,8 @@ def flatfiles(prefix):
 	natfile = open('%s.natives'%prefix,'w')
 
 	sep = Substitution.sep
-	header = ['complex','dna','prot_chain','prot_position','aa','is_native']
-	natheader = ['complex','dna','prot_chain','prot_position','aa','ndestab','ndestab_binding']
+	header = ['complex','dna','prot_chain','prot_position','mut','wt','is_native']
+	natheader = ['complex','dna','prot_chain','prot_position','wt','ndestab','ndestab_binding']
 
 	class ScoreType:
 		def __init__(self,name,temp=0.):
@@ -125,7 +132,7 @@ def flatfiles(prefix):
 				destabilizing = {'bound':2,'binding':1}
 				n_destabilizing = {'bound':0,'binding':0}
 				for sub in sorted( sublist ):
-					dataline = [ complex, dna_pos, chain, pos, sub['aa'], '%i' %(sub['aa'] == native['aa']) ]
+					dataline = [ complex, dna_pos, chain, pos, sub['aa'], native['aa'], '%i' %(sub['aa'] == native['aa']) ]
 					for st in score_types:
 						dataline.append( '%.3f' %( sub[st.name] ) )
 						ddG = sub[st.name] - native[st.name]
@@ -165,8 +172,10 @@ def flatfiles(prefix):
 						natline.append( '%.3f' %boltz )
 						natline.append( '%.3f' %sd )
 				# report the "classic binding energy per residue" as native - gly
-				natline.append( '%.3f' %( native['binding'] - sublist.aa('GLY')['binding'] ) )
-				natline.append( '%.3f' %( native['spec_binding'] - sublist.aa('GLY')['spec_binding'] ) )
+				#natline.append( '%.3f' %( native['binding'] - sublist.aa('GLY')['binding'] ) )
+				#natline.append( '%.3f' %( native['spec_binding'] - sublist.aa('GLY')['spec_binding'] ) )
+				natline.append( '%.3f' %( native['binding'] - sublist.aa('G')['binding'] ) )
+				natline.append( '%.3f' %( native['spec_binding'] - sublist.aa('G')['spec_binding'] ) )
 				natfile.write( string.join(natline,sep) + '\n' )
 
 				counter+=1
@@ -174,7 +183,7 @@ def flatfiles(prefix):
 ################################################################################
 complexes = None
 if opt.pathfile:
-	complexes = parse_outfile(opt.pathfile)
+	complexes = parse_outfiles(opt.pathfile)
 	pickle.dump( complexes, open('position.data.p','wb') )
 	flatfiles(opt.pathfile)
 elif opt.pickle:

@@ -1,26 +1,28 @@
+probMatrixFromFasta =
+	function(fastafile,filter='')
+{
+	require(Biostrings)
+	seqs=read.DNAStringSet(fastafile)
+	if(filter != '') seqs = gsub(filter,'',seqs)
+	ppm=consensusMatrix(seqs,as.prob=T,baseOnly=T)
+	ppm=as.matrix(ppm)
+	return(ppm)
+}
+
 seqlogoFromFasta =
 	function(fastafile,plot=F)
 {
 	require(seqLogo)
-	require(Biostrings)
-	seqs=read.DNAStringSet(fastafile)
-
-# erroneous online example
-#	pwm=PWM(as.character(seqs))
-#	seqLogo(t(t(pwm)*1/colSums(pwm)))
-
-	# seqLogo takes a 'PWM' matrix of base probabilities per position (thus, not actually a PWM, but a probability matrix)
-	mat=consensusMatrix(seqs,as.prob=T,baseOnly=T)
-	mat=as.matrix(mat)
+	ppm = probMatrixFromFasta(fastafile)
 	# limit to first four rows (ACGT) (drops fifth row, 'other')
-	mat=mat[seq(1,4),]
+	ppm=ppm[seq(1,4),]
 	# hardcoded arbitrary subsequence for 2e1c DNA (otherwise rosetta 'design_mutations' DNA .fa files read through both strands)
-	mat=mat[,seq(2,16)]
+	#ppm=ppm[,seq(2,16)]
 	# normalize (if necessary)
-	mat=t(t(mat)*1/colSums(mat))
-	if(plot){seqLogo(mat)}
-#	if(plot){seqLogo(mat,ic.scale=F)}
-	return(mat)
+	ppm=t(t(ppm)*1/colSums(ppm))
+	if(plot){seqLogo(ppm)}
+#	if(plot){seqLogo(ppm,ic.scale=F)}
+	return(ppm)
 }
 
 dis.ED = function(P,Q)
