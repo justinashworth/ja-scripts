@@ -19,18 +19,24 @@ load.sequence =
 	return(seqlist)
 }
 
+revcomp =
+	function(x)
+{
+	return( as.character(reverseComplement(DNAString(x))) )
+}
+
 get.hitseqs =
-	function(hits,seqs)
+	function(hits,seqs,flank=c(0,0),revcomp=T)
 {
 	sapply(1:nrow(hits),
 		function(i){
-			contig = hits[i,1]
-			strand = hits[i,2]
-			start = hits[i,3]
-			end = hits[i,4]
-			seq = substring(seqs[[contig]],start,end)
-#			if(strand==-1){ revcompDNA(seq) }
-			if(strand==-1){ seq = as.character(reverseComplement(DNAString(seq))) }
+			contig = hits[i,'seq']
+			strand = hits[i,'strand']
+			start = hits[i,'start']
+			end = hits[i,'end']
+			seq = substring(seqs[[contig]], start+flank[1], end+flank[2])
+			# sometimes, decision to transform is external (revcomp==F)
+			if(strand==-1 & revcomp){seq = revcomp(seq)}
 			return(seq)
 		}
 	)
@@ -176,8 +182,8 @@ load_regions_from_TSS =
 	rvs = TSS$Strand == 'Rev'
 	TSS$window.start[rvs] = TSS$TSS[rvs] + upstream
 	TSS$window.end[rvs] = TSS$TSS[rvs] - downstream
-	regions=TSS[, c('Name','Chr','window.start','window.end')]
-	names(regions)=c('name','seq','start','end')
+	regions=TSS[, c('Name','Chr','window.start','window.end','Strand','TSS','TTS')]
+	names(regions)=c('name','seq','start','end','dir','tss','tts')
 #	cat(nrow(regions), ' regions\n')
 	print( head(regions) )
 	return(regions)
@@ -197,6 +203,36 @@ regions_for_genes =
 	regions = regions[ regions$name %in% genes, ]
 #	cat('there are now ', nrow(regions), ' regions\n')
 	return(regions)
+}
+
+hits.in.regions =
+	function(hits,regions)
+{
+	# filter/annotate hits in regions,
+	# expand/flatten for hits matching multiple regions as necessary
+	#print(head(regions))
+	#print(head(hits))
+	hitindices = c()
+	regionnames = c()
+	for(i in 1:nrow(hits)){
+		seq.match = as.character(hits[i,'seq']) == as.character(regions$seq)
+		pos = (hits[i,'start'] + hits[i,'end']) / 2
+		after.start = pos >= regions$start
+		before.end = pos <= regions$end
+		matched.regions = na.exclude( regions$name[ which(seq.match & after.start & before.end) ] )
+		if(length(matched.regions) < 1) next
+		for(j in 1:length(matched.regions)){
+			hitindices = c(hitindices, i)
+			regionnames = c(regionnames, as.character(matched.regions[j]))
+		}
+	}
+	#print(length(hitindices))
+	#print(head(hitindices))
+	#print(length(regionnames))
+	#print(head(regionnames))
+	hitsinregions = unique( cbind( hits[hitindices,], regionnames) )
+	#print(head(hitsinregions))
+	return(hitsinregions)
 }
 
 filter.hits.by.regions =
@@ -242,6 +278,7 @@ motif_bootstrap =
 	#regions = load_regions_from_genecoords(regionsfile)
 	regions = load_regions_from_TSS(regionsfile)
 
+	# filter regions down to genes of interest
 	if (!is.null(genelist)){
 		cat('filtering ', nrow(regions), ' regions down to ', length(genelist), ' genes\n', file=logf, append=T)
 		regions = regions_for_genes(genelist,regions)
@@ -253,14 +290,22 @@ motif_bootstrap =
 	for( iter in 1:niter ) {
 		cat('iter ',iter,'\n',sep='')
 		cat('MASTing motif from file "',motfile,'" in sequence from fasta file "',seqfile,'"\n',sep='')
-		hitfile = sprintf('%shitfile.%04d',prefix,iter,sep='')
-		mast.cmd = paste('mast',motfile,seqfile,mast.args,'>',hitfile)
+		allhits = sprintf('%sallhits.%04d',prefix,iter,sep='')
+		mast.cmd = paste('mast',motfile,seqfile,mast.args,'>',allhits)
 		cat(mast.cmd,'\n')
 		system(mast.cmd)
-		hits = read.table(hitfile,as.is=T)
+		hits = read.table(allhits,as.is=T)
+		names(hits) = c('seq','strand','start','end','score','pval')
+		#print(head(hits,10))
 
-		# filter by regions (if present)
-		if(!is.null(regions)) hits = hits[ filter.hits.by.regions(hits,regions), ]
+		# filter hits by regions (if present)
+		if(!is.null(regions)) {
+			#hits = hits[ filter.hits.by.regions(hits,regions), ]
+			cat('fetching hits in regions\n')
+			hits = hits.in.regions(hits,regions)
+			#regionhits = sprintf('%sregionhits.%04d',prefix,iter,sep='')
+			#tsv(hits,regionhits)
+		}
 		cat(nrow(hits),' hits in regions\n',file=logf,append=T)
 
 		if (nrow(hits) == 0) {
@@ -269,7 +314,12 @@ motif_bootstrap =
 		}
 
 		# sort by pval and cull
-		hits = hits[ order(hits[,6])[ 1:min(nrow(hits),maxhits) ] , ]
+		hits = hits[ order(hits[,'pval'])[ 1:min(nrow(hits),maxhits) ] , ]
+
+		# write sorted, culled hits
+		besthits = sprintf('%sbesthits.%04d',prefix,iter,sep='')
+		tsv(hits,besthits)
+		print(head(hits,10))
 
 		# load searched sequence(s)
 		seqs = load.sequence(seqfile)
@@ -300,6 +350,84 @@ motif_bootstrap =
 		mname = sprintf('%s%s.%04d',prefix,seqfile,iter)
 		# write new bootstrap motif to file, updating 'motfile' in the process so that it is used next
 		motfile = write.MEME.motif(prob.matrix,bg.probs,mname,length(hitseqs))
+
+		# plot best aligned hit sites in sequences of interest
+		if(images & (iter==niter | iter==1)){
+			pdf( sprintf('%salignedhits.%04d.pdf', prefix, iter, sep=''), onefile=F, useDingbats=F, font='mono', pointsize=8, height=8, width=16)
+			par(family='mono')
+			nhits = min(50, nrow(hits))
+			xbound = c(-50,150)
+			plot(0, 0, type='n', xlim=c(xbound[1]-10,xbound[2]), ylim=c(-5,nhits+5), ylab='', xlab='', yaxt='n')
+
+			hit.centric = T
+			if(hit.centric){
+				for(hit in 1:nhits){
+
+					genelab = hits[hit,'regionnames']
+					region = which(regions$name==genelab)[1]
+					#print(regions[region,])
+					tss = as.integer( regions$tss[region] )
+					tts = as.integer( regions$tts[region] )
+					rvs = regions$dir[region] == 'Rvs'
+					if(is.na(tts)){
+						#...it happens
+						if(rvs)tts = tss-500
+						else tts = tss+500
+					}
+					#cat(genelab,tss,tts,rvs,'\n')
+
+					# hit sequence
+					hitseq = get.hitseqs(hits[hit,],seqs,revcomp=F)
+					if(rvs){hitseq = revcomp(hitseq)}
+#					print(hits[hit,])
+#					print(hitseq)
+
+					# region sequence
+					flank = c(-200,200)
+					bgseq = get.hitseqs(hits[hit,],seqs,flank=flank,revcomp=F)
+					if(rvs){bgseq = revcomp(bgseq)}
+
+					for(char in 1:nchar(bgseq)){
+						xpos = char-1+flank[1]
+						if(xpos < xbound[1] | xpos > xbound[2]) next
+						if(char>=1+flank[1] & char<=nchar(hitseq)+flank[1])next
+						letter = substring(bgseq,char,char)
+						text(xpos, nhits-hit, letter, col='black',font=1)
+					}
+
+					# gene label and TSS
+					text(-60, nhits-hit, genelab)
+					hitstart = hits[hit,'start']
+					if(!rvs){
+						offset = tss-hitstart
+						tsslen = tts-tss
+						maxchar = min(tsslen,200)
+						tssseq = get.hitseqs(hits[hit,],seqs,flank=c(offset,offset+maxchar),revcomp=F)
+						for(char in 1:nchar(tssseq)){
+							xpos = char-1+offset
+							if(xpos < xbound[1] | xpos > xbound[2]) next
+
+							#if(char>=1-flank[1] & char<=nchar(hitseq)-flank[1])next
+							letter = substring(tssseq,char,char)
+							text(xpos, nhits-hit, letter, col='orange',font=2)
+						}
+					}
+					# hit seq (top layer)
+					for(char in 1:nchar(hitseq)){
+						letter = substring(hitseq,char,char)
+						text(char-1, nhits-hit, letter, col='blue',font=2)
+					}
+				}
+			} else {
+				# tss-centric
+				# get genes/tss's with best hits
+				# plot array of these sequences, aligned by the TSS
+				# superimpose hit site sequences
+			}
+
+			dev.off()
+		}
+
 	}
 
 	if (images) dev.off()
