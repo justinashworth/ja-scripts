@@ -27,26 +27,16 @@ opt = getopt(matrix(c(
 	'help'         , 'h', 0, 'logical'
 ),ncol=4,byrow=T))
 
-if( is.null(opt$niter)        ) opt$niter = 10
-if( is.null(opt$maxhits)      ) opt$maxhits = 500
-if( is.null(opt$mixture)      ) opt$mixture = 0.25
+if( is.null(opt$seqf)         ) opt$seqf = 'halo.genome.fa'
+#if( is.null(opt$niter)        ) opt$niter = 10
+if( is.null(opt$niter)        ) opt$niter = 1
+if( is.null(opt$maxhits)      ) opt$maxhits = 250
+if( is.null(opt$mixture)      ) opt$mixture = 0.7
+if( is.null(opt$bgfile)       ) opt$bgfile = 'halo.bg.file'
+if( is.null(opt$regions)      ) opt$regions = 'tssflat.tsv'
 if( is.null(opt$pseudocounts) ) opt$pseudocounts = 1
-if( is.null(opt$mt)           ) opt$mt = 0.0001
-if( is.null(opt$images)       ) opt$images = FALSE
-
-if( is.null(opt$seqf) | !is.null(opt$help) ) {
-	cat('args: -m <motif_file> -s <fasta_seq> [-[n|-niter] <%d>] [-[x|-maxhits] <%d>] [-[b|-bgfile] <bgfile>] [-[p|-pseudocounts] <%d>] [-[g|-images]]\n')
-	opt$seqf = 'halo.genome.fa'
-	opt$bgfile = 'halo.bg.file'
-	#opt$regions = 'halo.gene.coords.tsv'
-	opt$regions = 'TSS-TTS.txt'
-#	q('no')
-}
-
-if( opt$mixture < 0 | opt$mixture > 1 ){
-	cat('invalid mixture ratio\n')
-	q('no')
-}
+if( is.null(opt$mt)           ) opt$mt = 0.0004
+if( is.null(opt$images)       ) opt$images = TRUE
 
 print(opt)
 
@@ -92,9 +82,9 @@ FY.listtypes = list(
 )
 
 FY.combine = list(
-	'all.ChIP'     = c('pos.ChIP','neg.ChIP'),
-	'all.ChIP.KO'  = c('pos.ChIP.KO','neg.ChIP.KO'),
-	'all.genes.KO' = c('pos.genes.KO','neg.genes.KO')
+	'pos.neg.ChIP'     = c('pos.ChIP','neg.ChIP'),
+	'pos.neg.ChIP.KO'  = c('pos.ChIP.KO','neg.ChIP.KO'),
+	'pos.neg.genes.KO' = c('pos.genes.KO','neg.genes.KO')
 )
 
 # create 'all' (pos+neg) gene lists
@@ -104,30 +94,41 @@ cat('creating \'all\' lists (pos+neg)\n')
 for(listtype in names(FY.combine)){
 	cat(listtype,'\n')
 	listtypes[[listtype]]=list()
-	for(i in 1:nrow(tftable)){
-		tfcode = as.character(tftable$code[i])
-		tfname = as.character(tftable$name[i])
-		cat('\t',tfcode,tfname,'\n')
-		listtypes[[listtype]][[tfcode]] =
-			unique( unlist( sapply( FY.combine[[listtype]], function(x){ unlist(FY.listtypes[[x]][[tfcode]]) } ) ) )
+	for(tf in 1:nrow(tftable)){
+		tfcode = as.character(tftable$code[tf])
+		tfname = as.character(tftable$name[tf])
+		motfile = as.character(motfiles[[tfname]])
+		pair = paste(tfcode,motfile,sep='.')
+		cat('\t',pair,'\n')
+		listtypes[[listtype]][[pair]] =
+			unique( unlist( sapply(
+				FY.combine[[listtype]],
+				function(x){ unlist(FY.listtypes[[x]][[tfcode]]) } )
+			))
 	}
 }
 
 cat('adapting predicted motifs\n')
-for(i in 1:nrow(tftable)){
-	tfcode = as.character(tftable$code[i])
-	tfname = as.character(tftable$name[i])
-	motfile = motfiles[[tfname]]
-	cat(tfcode,tfname,motfile,'\n')
+for(tf in 1:nrow(tftable)){
+	tfcode = as.character(tftable$code[tf])
+	tfname = as.character(tftable$name[tf])
+	motfile = as.character(motfiles[[tfname]])
+	pair = paste(tfcode,motfile,sep='.')
+	cat('\t',pair,'\n')
 
 	for(listtype in names(listtypes)){
 		cat(listtype,'\n')
-		genelist = listtypes[[listtype]][[tfcode]]
+		genelist = listtypes[[listtype]][[pair]]
 		genelist = unique( unlist(genelist) )
+		genelist = genelist[ !is.na(genelist) ]
+		if(length(genelist)<1){
+			cat('no genes!\n')
+			next
+		}
 		cat(length(genelist),'genes\n')
 		print( head(genelist) )
 
-		prefix=paste(tfname,'/',listtype,'/',sep='')
+		prefix=paste(pair,'/',listtype,'/',sep='')
 		dir.create(prefix,recursive=T)
 
 		motif_bootstrap(
