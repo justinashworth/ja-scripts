@@ -46,17 +46,20 @@ get.hitseqs =
 }
 
 seqs.to.count.matrix =
-	function(seqs)
+	function(seqs,dna=T)
 {
-	ltrs = sort(unique(unlist(strsplit(seqs,''))))
-	maxl = max(sapply(seqs,nchar))
-	cmat = matrix(0,nrow=maxl,ncol=length(ltrs))
+	ltrs = c('A','C','G','T')
+	if(!dna) ltrs = sort(unique(unlist(strsplit(seqs,''))))
+
+	maxlen = max(sapply(seqs,nchar))
+	cmat = matrix(0,nrow=maxlen,ncol=length(ltrs))
 	colnames(cmat) = ltrs
 	# [sapply didn't want to increment in cmat here...]
 	for(seq in seqs){
 		for(char in 1:nchar(seq)){
 			ltr = substring(seq,char,char)
-			cmat[char,which(ltrs==ltr)] = cmat[char,which(ltrs==ltr)] + 1
+			if(!ltr %in% ltrs) next
+			cmat[char,ltr] = cmat[char,ltr] + 1
 		}
 	}
 	return(cmat)
@@ -335,7 +338,7 @@ motif_bootstrap =
 
 		count.matrix = seqs.to.count.matrix(hitseqs)
 		# add pseudocounts for mathematical stability
-		count.matrix[ count.matrix == 0 ] = pseudocounts
+		count.matrix = count.matrix + pseudocounts
 		print(count.matrix)
 
 		# probability matrix
@@ -358,7 +361,7 @@ motif_bootstrap =
 
 		# get genes/tss's with best hits
 		nhitgenes = length( which( regions$name %in% hits$regionnames ))
-		cat(nhitgenes,'/',nrow(regions),' hits in regions\n',sep='',file=logf,append=T)
+		cat(nhitgenes,'/',nrow(regions),' hits in gene upstream regions\n',sep='',file=logf,append=T)
 
 		# plot best aligned hit sites in sequences of interest
 		if(images & (iter==niter | iter==1)){
