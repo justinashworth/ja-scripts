@@ -93,17 +93,17 @@ MEME.pmat.from.file =
 }
 
 write.MEME.motif =
-	function(prob.matrix,bg.probs,mname,nhits)
+	function(prob.matrix,bg.probs,mname,nhits=1)
 {
 	# MEME PWM
 	weight.matrix = t(apply(prob.matrix,1,function(x){log(x/as.numeric(bg.probs),2)}))
 
 	lines = c( "MEME version 3.0", "", "ALPHABET= ACGT", "", "strands: + -", "","Background letter frequencies (from dataset with add-one prior applied):" )
-	lines = c( lines, paste( names(unlist(bg.probs)), sprintf( "%.3f", unlist( bg.probs )), collapse=" " ) )
+	lines = c( lines, paste( names(unlist(bg.probs)), sprintf( "%.4f", unlist( bg.probs )), collapse=" " ) )
 	lines = c( lines, "", sprintf( "MOTIF %s", mname ), sprintf( "log-odds matrix: alength= %d w= %d", length(bg.probs), nrow(prob.matrix)))
 	lines = c( lines, apply( weight.matrix, 1, function(i) sprintf( "%5.3f %5.3f %5.3f %5.3f", i[1],i[2],i[3],i[4] )))
 	lines = c( lines, "", sprintf( "letter-probability matrix: alength= %d w= %d nsites= %d E= %.3e", length(bg.probs), nrow(prob.matrix), nhits, 0 ))
-	lines = c( lines, apply( prob.matrix, 1, function(i) sprintf( "%5.3f %5.3f %5.3f %5.3f", i[1],i[2],i[3],i[4] )))
+	lines = c( lines, apply( prob.matrix, 1, function(i) sprintf( "%.4f %.4f %.4f %.4f", i[1],i[2],i[3],i[4] )))
 
 	fname = paste(mname,'MEME',sep='.')
 	cat( lines, sep="\n", file=fname )
@@ -157,13 +157,12 @@ load_regions_from_genecoords =
 	fwd = coords$Orientation == 'For'
 	coords$cis.start[fwd] = coords$Start[fwd] - upstream
 	coords$cis.end[fwd] = coords$Start[fwd] + downstream
-	# in halo gene coords, 'Start' (generally) refers to coordinate start (i.e. start > end: not 5' for reverse-strand genes)
+	# in halo gene coords, 'Start' for reverse-strand genes is > 'Stop'
 	rvs = coords$Orientation == 'Rev'
-	# is this right? might need to be looking at coords$End
 	coords$cis.start[rvs] = coords$Start[rvs] + upstream
 	coords$cis.end[rvs] = coords$Start[rvs] - downstream
-	regions=coords[, c('canonical_Name','where','cis.start','cis.end')]
-	names(regions)=c('name','seq','start','end')
+	regions=coords[, c('canonical_Name','where','cis.start','cis.end','Orientation','Start','Stop')]
+	names(regions)=c('name','seq','start','end','dir','tss','tts')
 #	cat(nrow(regions), ' regions\n')
 	print( head(regions) )
 	return(regions)
@@ -268,21 +267,23 @@ motif_bootstrap =
 		bg.probs = load_bgprobs(bgfile)
 	}
 
-	# NOTE: 0001 will be the starting search motif, 0002 will be the first bootstrap motif
-	if(images){
-		pdf(paste(prefix,'motif.%04d.pdf',sep=''),width=10,height=4,onefile=F)
-	}
-
 	start.pmat = MEME.pmat.from.file(motfile)
+	last.prob.matrix = start.pmat
+	# rewrite starting motif to ensure faithfulness of following function
+	mname = sprintf('%s%s.%04d',prefix,seqfile,0)
+	write.MEME.motif(start.pmat,bg.probs,mname)
+
 	library(seqLogo)
+
+	if(images){ pdf( sprintf('%smotif.%04d.pdf',prefix,0), width=10,height=4) }
+
 	seqLogo(t(start.pmat))
 
-	if(!images) dev.new()
+	if(images) dev.off()
+	else dev.new()
 
-	last.prob.matrix = NULL
-
-	#regions = load_regions_from_genecoords(regionsfile)
-	regions = load_regions_from_TSS(regionsfile)
+	regions = load_regions_from_genecoords(regionsfile)
+	#regions = load_regions_from_TSS(regionsfile)
 
 	# filter regions down to genes of interest
 	if (!is.null(genelist)){
@@ -337,22 +338,39 @@ motif_bootstrap =
 		cat(paste(head(hitseqs),'\n',sep=''),'...\n',sep='')
 
 		count.matrix = seqs.to.count.matrix(hitseqs)
-		# add pseudocounts for mathematical stability
-		count.matrix = count.matrix + pseudocounts
+		cat('Count matrix (raw):\n')
 		print(count.matrix)
+
+		## ensure that pseudocounts don't swap out signal for small numbers of hits--
+		## limit pseudocount influence to <= 10%, by scaling up counts for small numbers of hits (i.e. <10)
+		## actually, can just set pseudocounts value to 0.1 to achieve the same result--do so in function call
+		#if(length(hitseqs)<10){
+		#	count.matrix = count.matrix * (10 / length(hitseqs))
+		#	cat('Count matrix (scaled):\n')
+		#	print(count.matrix)
+		#}
+
+		## add pseudocounts for mathematical stability
+		count.matrix = count.matrix + pseudocounts
+		#cat('Count matrix (with pseudocounts):\n')
+		#print(count.matrix)
 
 		# probability matrix
 		prob.matrix = count.matrix / apply(count.matrix,1,sum)
-		if ( !all(prob.matrix==0.25) ) seqLogo(t(prob.matrix))
-		if ( is.null(last.prob.matrix) ) {
-		last.prob.matrix = prob.matrix
-		} else if ( all(prob.matrix == last.prob.matrix) ) {
+		if ( all(prob.matrix == last.prob.matrix) ) {
 			cat('bootstrap PPM converged!\n',file=logf,append=T)
 			break
 		} else {
 			# mix the match-generated motif with the search motif
 			# how? lets just try weighted average probabilities...
 			prob.matrix = (1-mixture) * prob.matrix + mixture * last.prob.matrix
+		}
+
+		if ( !all(prob.matrix==0.25) ) {
+			if(images){ pdf(sprintf('%smotif.%04d.pdf',prefix,iter),width=10,height=4) }
+			seqLogo(t(prob.matrix))
+			if(images) dev.off()
+			else dev.new()
 		}
 
 		mname = sprintf('%s%s.%04d',prefix,seqfile,iter)
@@ -371,7 +389,7 @@ motif_bootstrap =
 
 			if(hit.centric){
 
-				pdf( sprintf('%salignedhits.%04d.pdf', prefix, iter, sep=''), onefile=F, useDingbats=F, font='mono', pointsize=8, height=8, width=28)
+				pdf( sprintf('%salignedhits.%04d.pdf', prefix, iter), onefile=F, useDingbats=F, font='mono', pointsize=8, height=8, width=28)
 				par(family='mono')
 				nhits = min(50, nrow(hits))
 				xbound = c(-100,300)
@@ -438,7 +456,7 @@ motif_bootstrap =
 			}
 
 			if(tss.centric){
-				pdf( sprintf('%salignedtss.%04d.pdf', prefix, iter, sep=''), onefile=F, useDingbats=F, font='mono', pointsize=8, height=8, width=28)
+				pdf( sprintf('%salignedtss.%04d.pdf', prefix, iter), onefile=F, useDingbats=F, font='mono', pointsize=8, height=8, width=28)
 				par(family='mono')
 
 				nhits = min(50, nrow(hits))
@@ -513,5 +531,4 @@ motif_bootstrap =
 
 	}
 
-	if (images) dev.off()
 }
