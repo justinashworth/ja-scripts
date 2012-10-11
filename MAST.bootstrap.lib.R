@@ -282,37 +282,58 @@ motif_bootstrap =
 	if(images) dev.off()
 	else dev.new()
 
-	regions = load_regions_from_genecoords(regionsfile)
-	#regions = load_regions_from_TSS(regionsfile)
+	allregions = load_regions_from_genecoords(regionsfile)
+	n.allregions = length( unique(allregions$name) )
+	#allregions = load_regions_from_TSS(regionsfile)
+
+	regions = allregions
 
 	# filter regions down to genes of interest
 	if (!is.null(genelist)){
 		cat('filtering ', nrow(regions), ' regions down to ', length(genelist), ' genes\n', file=logf, append=T)
 		regions = regions_for_genes(genelist,regions)
 	}
-	cat('there are ', nrow(regions), ' regions\n', file=logf, append=T)
+	n.regions = length( unique(regions$name) )
+	cat('there are ', n.regions, ' regions\n', file=logf, append=T)
 
 	# TO DO: compute true background in regions being searched?
 
 	for( iter in 1:niter ) {
 		cat('iter ',iter,'\n',sep='')
 		cat('MASTing motif from file "',motfile,'" in sequence from fasta file "',seqfile,'"\n',sep='')
-		allhits = sprintf('%sallhits.%04d',prefix,iter,sep='')
-		mast.cmd = paste('mast',motfile,seqfile,mast.args,'>',allhits)
+		masthits = sprintf('%smasthits.%04d',prefix,iter,sep='')
+		mast.cmd = paste('mast',motfile,seqfile,mast.args,'>',masthits)
 		cat(mast.cmd,'\n')
 		system(mast.cmd)
-		hits = read.table(allhits,as.is=T)
+		hits = read.table(masthits,as.is=T)
 		names(hits) = c('seq','strand','start','end','score','pval')
 		#print(head(hits,10))
+
+		# annotate all hits (genomewide)
+		# warning: slow. Avoid if not necessary
+		allhits = hits.in.regions(hits,allregions)
+		allhitsfile = sprintf('%sallhits.%04d',prefix,iter,sep='')
+		tsv(allhits,allhitsfile)
+		# TODO get number of all gene regions containing hits
+		n.allregions.hit = length( unique(allhits$regionnames) )
 
 		# filter hits by regions (if present)
 		if(!is.null(regions)) {
 			#hits = hits[ filter.hits.by.regions(hits,regions), ]
 			cat('fetching hits in regions\n')
 			hits = hits.in.regions(hits,regions)
+			n.regions.hit = length( unique(hits$regionnames) )
 			#regionhits = sprintf('%sregionhits.%04d',prefix,iter,sep='')
 			#tsv(hits,regionhits)
+
+			# compute a hypergeometric p for hits in gene vs. hits in genome
+			cat(n.regions.hit, 'regions hit in', n.regions, 'target regions with', n.allregions.hit, 'of all', n.allregions, 'total regions hit\n')
+			p.regionhits = phyper(n.regions.hit, n.allregions.hit, n.allregions-n.allregions.hit, n.regions, lower.tail=F)
+			cat('hypergeometric p-val:', p.regionhits, '\n')
+
+			cat(n.regions.hit,'/',n.regions,' hits in target gene upstream regions with ', n.allregions.hit,'/',n.allregions, ' of all regions hit', ' pval=', p.regionhits, '\n',sep='',file=logf,append=T)
 		}
+
 
 		regions = regions[ !is.na(regions$seq), ]
 
@@ -377,9 +398,6 @@ motif_bootstrap =
 		# write new bootstrap motif to file, updating 'motfile' in the process so that it is used next
 		motfile = write.MEME.motif(prob.matrix,bg.probs,mname,length(hitseqs))
 
-		# get genes/tss's with best hits
-		nhitgenes = length( which( regions$name %in% hits$regionnames ))
-		cat(nhitgenes,'/',nrow(regions),' hits in gene upstream regions\n',sep='',file=logf,append=T)
 
 		# plot best aligned hit sites in sequences of interest
 		if(images & (iter==niter | iter==1)){
