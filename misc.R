@@ -73,3 +73,10 @@ load.sequence =
 	names(seqlist)=sapply(seqs,function(x){x$desc})
 	return(seqlist)
 }
+
+rvscomp =
+	function(x)
+{
+	return( as.character(reverseComplement(DNAString(x))) )
+}
+

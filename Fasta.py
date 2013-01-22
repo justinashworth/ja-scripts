@@ -6,7 +6,7 @@ __author__ = "Justin Ashworth"
 
 import os,re,string,sys
 from optparse import OptionParser
-from AshworthUtil import translate_simple, rvs_comp_str
+from AshworthUtil import translate, rvs_comp_str
 from InfoContent import *
 
 class Fasta:
@@ -95,9 +95,14 @@ class Fasta:
 		if not self.type in self.nttypes: return 0.0
 		return float(self.GC())/len(self.seq)
 
-	def translate(self):
+	def translate(self,frame=0):
+		if frame < 0 or frame > 2:
+			sys.stderr.write('ERROR: invalid frame selection %s: aborting translation (valid: 0,1,2)\n' %frame)
+			return
 		if not self.type in self.nttypes: return
-		self.seq = translate_simple(self.seq)
+		#self.seq = translate_simple(self.seq)
+		translations = translate(self.seq)
+		self.seq = string.join(translations[frame], '')
 		self.type = 'protein'
 
 	def summarize(self):
@@ -164,7 +169,9 @@ class FastaSeqs:
 	op.add_option('-s','--summarize',action='store_true')
 	op.add_option('-S','--separate',action='store_true')
 	op.add_option('--subseqs')
+	op.add_option('--upstream')
 	op.add_option('-t','--translate',action='store_true')
+	op.add_option('-f','--frame',type='int',default=0,help='reading frame offset for translation')
 	op.add_option('-u','--unique',action='store_true')
 	op.add_option('--rvscomp',action='store_true')
 	op.add_option('--csv',action='store_true')
@@ -220,14 +227,14 @@ class FastaSeqs:
 			# deep copy/replace
 			self.seqs = subseqs.seqs
 			self.order = subseqs.order
-		if opt.translate: self.translate()
+		if opt.translate: self.translate(opt.frame)
 		if opt.filter: self.filter(opt)
 		if opt.ids: self.these_ids(opt.ids)
 		if opt.unique: self.unique()
 		if opt.rvscomp: self.rvscomp()
 
-	def translate(self):
-		for seq in self.seqs.values(): seq.translate()
+	def translate(self,frame=0):
+		for seq in self.seqs.values(): seq.translate(frame)
 
 	def filter(self,opt):
 		filteredseqs = {}

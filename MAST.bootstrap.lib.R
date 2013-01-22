@@ -257,8 +257,13 @@ filter.hits.by.regions =
 motif_bootstrap =
 	function(motfile,seqfile,bgfile,regionsfile,genelist=NULL,niter=10,maxhits=500,mixture=0.25,pseudocounts=1,mt=0.0001,images=T,prefix='BS.')
 {
+	result = list(motif=NULL, hits=NULL, target.genes=NULL, target.genes.matched=NULL, all.genes=NULL, all.genes.matched=NULL, enrichment.pval=NULL)
 	logf = paste(prefix,'log',sep='/')
 	cat(motfile,seqfile,bgfile,regionsfile,niter,maxhits,mixture,pseudocounts,mt,images,'\n',file=logf)
+
+	# load searched sequence(s)
+	search_sequence = load.sequence(seqfile)
+	cat('loaded sequence file with contigs:', names(search_sequence), '\n')
 
 	mast.args = sprintf('-hit_list -mt %g',mt)
 	bg.probs = default_bgprobs()
@@ -290,6 +295,7 @@ motif_bootstrap =
 
 	# filter regions down to genes of interest
 	if (!is.null(genelist)){
+		genelist = unique(genelist)
 		cat('filtering ', nrow(regions), ' regions down to ', length(genelist), ' genes\n', file=logf, append=T)
 		regions = regions_for_genes(genelist,regions)
 	}
@@ -302,7 +308,8 @@ motif_bootstrap =
 		cat('iter ',iter,'\n',sep='')
 		cat('MASTing motif from file "',motfile,'" in sequence from fasta file "',seqfile,'"\n',sep='')
 		masthits = sprintf('%smasthits.%04d',prefix,iter,sep='')
-		mast.cmd = paste('mast',motfile,seqfile,mast.args,'>',masthits)
+		#mast.cmd = paste('mast',motfile,seqfile,mast.args,'>',masthits)
+		mast.cmd = paste('mast_4.9.0',motfile,seqfile,mast.args,'>',masthits)
 		cat(mast.cmd,'\n')
 		system(mast.cmd)
 		hits = read.table(masthits,as.is=T)
@@ -313,7 +320,11 @@ motif_bootstrap =
 		# warning: slow. Avoid if not necessary
 		allhits = hits.in.regions(hits,allregions)
 		allhitsfile = sprintf('%sallhits.%04d',prefix,iter,sep='')
-		tsv(allhits,allhitsfile)
+		#tsv(allhits,allhitsfile)
+
+		allhitgenesfile = sprintf('%sallgeneshit.%04d',prefix,iter,sep='')
+		#cat( unique(as.character(allhits$regionnames)), file=allhitgenesfile)
+
 		# TODO get number of all gene regions containing hits
 		n.allregions.hit = length( unique(allhits$regionnames) )
 
@@ -322,6 +333,10 @@ motif_bootstrap =
 			#hits = hits[ filter.hits.by.regions(hits,regions), ]
 			cat('fetching hits in regions\n')
 			hits = hits.in.regions(hits,regions)
+
+			tgtgeneshitfile = sprintf('%stargetgeneshit.%04d',prefix,iter,sep='')
+			#cat( unique(as.character(hits$regionnames)), file=tgtgeneshitfile)
+
 			n.regions.hit = length( unique(hits$regionnames) )
 			#regionhits = sprintf('%sregionhits.%04d',prefix,iter,sep='')
 			#tsv(hits,regionhits)
@@ -329,11 +344,16 @@ motif_bootstrap =
 			# compute a hypergeometric p for hits in gene vs. hits in genome
 			cat(n.regions.hit, 'regions hit in', n.regions, 'target regions with', n.allregions.hit, 'of all', n.allregions, 'total regions hit\n')
 			p.regionhits = phyper(n.regions.hit, n.allregions.hit, n.allregions-n.allregions.hit, n.regions, lower.tail=F)
+			result$enrichment.pval = p.regionhits
 			cat('hypergeometric p-val:', p.regionhits, '\n')
 
 			cat(n.regions.hit,'/',n.regions,' hits in target gene upstream regions with ', n.allregions.hit,'/',n.allregions, ' of all regions hit', ' pval=', p.regionhits, '\n',sep='',file=logf,append=T)
 		}
-
+		result$hits = hits
+		result$target.genes = genelist
+		result$target.genes.matched = unique(as.character(hits$regionnames))
+		result$all.genes = unique(allregions$name)
+		result$all.genes.matched = unique(as.character(allhits$regionnames))
 
 		regions = regions[ !is.na(regions$seq), ]
 
@@ -347,15 +367,11 @@ motif_bootstrap =
 
 		# write sorted, culled hits
 		besthits = sprintf('%sbesthits.%04d',prefix,iter, sep='')
-		tsv(hits,besthits)
+		#tsv(hits,besthits)
 		print(head(hits,10))
 
-		# load searched sequence(s)
-		seqs = load.sequence(seqfile)
-		cat('loaded sequence file with contigs:', names(seqs), '\n')
-
 		# get sequences corresponding to matches
-		hitseqs = get.hitseqs(hits,seqs)
+		hitseqs = get.hitseqs(hits,search_sequence)
 		cat(paste(head(hitseqs),'\n',sep=''),'...\n',sep='')
 
 		count.matrix = seqs.to.count.matrix(hitseqs)
@@ -397,7 +413,7 @@ motif_bootstrap =
 		mname = sprintf('%s%s.%04d',prefix,seqfile,iter)
 		# write new bootstrap motif to file, updating 'motfile' in the process so that it is used next
 		motfile = write.MEME.motif(prob.matrix,bg.probs,mname,length(hitseqs))
-
+		result$motif = prob.matrix
 
 		# plot best aligned hit sites in sequences of interest
 		if(images & (iter==niter | iter==1)){
@@ -429,14 +445,14 @@ motif_bootstrap =
 					#cat(genelab,tss,tts,rvs,'\n')
 
 					# hit sequence
-					hitseq = get.hitseqs(hits[hit,],seqs,revcomp=F)
+					hitseq = get.hitseqs(hits[hit,],search_sequence,revcomp=F)
 					if(rvs){hitseq = rvscomp(hitseq)}
 #					print(hits[hit,])
 #					print(hitseq)
 
 					# region sequence
 					flank = c(-200,200)
-					bgseq = get.hitseqs(hits[hit,],seqs,flank=flank,revcomp=F)
+					bgseq = get.hitseqs(hits[hit,],search_sequence,flank=flank,revcomp=F)
 					if(rvs){bgseq = rvscomp(bgseq)}
 
 					for(char in 1:nchar(bgseq)){
@@ -454,7 +470,7 @@ motif_bootstrap =
 						offset = tss-hitstart
 						tsslen = tts-tss
 						maxchar = min(tsslen,200)
-						tssseq = get.hitseqs(hits[hit,],seqs,flank=c(offset,offset+maxchar),revcomp=F)
+						tssseq = get.hitseqs(hits[hit,],search_sequence,flank=c(offset,offset+maxchar),revcomp=F)
 						for(char in 1:nchar(tssseq)){
 							xpos = char-1+offset
 							if(xpos < xbound[1] | xpos > xbound[2]) next
@@ -503,15 +519,15 @@ motif_bootstrap =
 					upstream = character()
 					downstream = character()
 
-					if(!contig %in% names(seqs)){
+					if(!contig %in% names(search_sequence)){
 						cat('in tss plotting:',contig,' not in sequences!\n')
 					}
 					if(rvs){
-						upstream = rvscomp( substring(seqs[[contig]], tss+1, tss-xbound[1]))
-						downstream = rvscomp( substring(seqs[[contig]], tss-xbound[2], tss))
+						upstream = rvscomp( substring(search_sequence[[contig]], tss+1, tss-xbound[1]))
+						downstream = rvscomp( substring(search_sequence[[contig]], tss-xbound[2], tss))
 					}else{
-						upstream = substring(seqs[[contig]], tss+xbound[1], tss-1)
-						downstream = substring(seqs[[contig]], tss, tss+xbound[2])
+						upstream = substring(search_sequence[[contig]], tss+xbound[1], tss-1)
+						downstream = substring(search_sequence[[contig]], tss, tss+xbound[2])
 					}
 					for(char in 1:nchar(upstream)){
 						xpos = char+xbound[1]-1
@@ -530,7 +546,7 @@ motif_bootstrap =
 					# superimpose hit sites for this gene
 					genehits = hits[ hits$regionnames==name, ]
 					for(hit in 1:nrow(genehits)){
-						hitseq = get.hitseqs(genehits[hit,],seqs,revcomp=F)
+						hitseq = get.hitseqs(genehits[hit,],search_sequence,revcomp=F)
 						if(rvs) hitseq = rvscomp(hitseq)
 
 						for(char in 1:nchar(hitseq)){
@@ -548,5 +564,6 @@ motif_bootstrap =
 		}
 
 	}
+	return(result)
 
 }

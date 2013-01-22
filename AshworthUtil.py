@@ -446,6 +446,19 @@ def permute_me(P):
 	if P.type in threeletter.values(): return 0
 	return 1
 
+def SNPs(codon):
+	codon = codon.upper()
+	SNPs = []
+	for i in range(len(codon)):
+		for base in BASES:
+			if codon[i] == base: continue
+			# list workaround for 'immutable string' silliness
+			SNP = [n for n in codon]
+			SNP[i] = base
+			SNP = string.join(SNP,'')
+			SNPs.append(SNP)
+	return SNPs
+
 class Residue:
 	def __init__(self,type=''):
 		self.type = type

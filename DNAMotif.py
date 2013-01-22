@@ -98,6 +98,11 @@ class DNAMotif:
 		self.bg = bg
 		return(bg)
 
+	def read_counts(self,mat=[]):
+		self.set_width(len(mat))
+		self.matrix['counts'] = mat
+		self.data_type = 'counts'
+
 	def make_counts_matrix(self,sequences=[]):
 		for s in sequences:
 			l = len(s)
@@ -129,7 +134,7 @@ class DNAMotif:
 				self.matrix['logodds'][i][base] = math.log( float(prob) / self.bg[base] ) / math.log(2.0)
 
 	def __str__(self):
-		return self.output_default()
+		return self.output_default('probs')
 
 	def output(self,type='',name=None):
 		if not name: name = self.name

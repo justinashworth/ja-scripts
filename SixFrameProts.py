@@ -20,6 +20,7 @@ class SixFrameTranslation(dict):
 		self['rvs']=[None,None,None]
 		self.translate(ntseq,minlen)
 
+	# complete six-frame translations in both directions
 	def translate(self,ntseq,minlen=0):
 		l = len(ntseq)
 		for i in range(3):
@@ -39,26 +40,35 @@ class SixFrameTranslation(dict):
 			out.append( self['rvs'][i] )
 		return string.join(out,'\n')
 
+	# for each of the three reading frames, split the frame into contiguous protein sequences
 	def split(self,prefix,minlen):
 		out=[]
 		for dir in ['fwd','rvs']:
 			for i in range(3):
-				out.extend( protsplit(self[dir][i],'%s_%s'%(prefix,dir),minlen,i) )
+				out.extend( protsplit(self[dir][i],'%s_%s'%(prefix,dir),minlen,i,dir) )
 		return out
 
-def protsplit(protstr,prefix='',minlen=0,offset=0):
-	re_prot = Fasta().re_protein
+# offset is the frame
+def protsplit(protstr,prefix='',minlen=0,offset=0, dir='fwd'):
+	prot = 'ACDEFGHIKLMNPQRSTVWY'
+	re_prot = re.compile('[%s]+' %prot)
 	out=[]
+	plen = len(protstr)
+	nlen = plen*3
 	for match in re_prot.finditer(protstr):
 #		print prefix,offset,match.start(),match.end()
-		if match.end() - match.start() < minlen: continue
-		out.append( Fasta(protstr[match.start():match.end()],'%s_%i'%(prefix,match.start()*3+offset)) )
+		start = match.start()
+		end = match.end()
+		if end - start < minlen: continue
+		nucleotide_start = start*3+offset
+		if dir=='rvs': nucleotide_start = nlen - start*3 - offset
+		out.append( Fasta( protstr[match.start():match.end()] , '%s_%i'%(prefix,nucleotide_start) ) )
 	return out
 
 class App:
 	def run(self,opt,args):
 		seqs = FastaSeqs()
-		seqs.go(args)
+		seqs.loadseqs(args)
 		for name,seq in sorted(seqs.seqs.items()):
 			trans=SixFrameTranslation(seq)
 #			print name
