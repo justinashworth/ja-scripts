@@ -19,6 +19,7 @@ opt = getopt(matrix(c(
 	'maxhits'      , 'h', 1, 'integer',
 	'mixture_start', 'X', 1, 'double',
 	'mixture_end'  , 'x', 1, 'double',
+	'finish_iters' , 'f', 1, 'integer',
 	'bgfile'       , 'b', 1, 'character',
 	'regions'      , 'r', 1, 'character',
 	'genes'        , 'g', 1, 'character',
@@ -35,6 +36,7 @@ if( is.null(opt$niter)        ) opt$niter = 50
 if( is.null(opt$maxhits)      ) opt$maxhits = 200
 if( is.null(opt$mixture_start)) opt$mixture_start = 0.75
 if( is.null(opt$mixture_end)  ) opt$mixture_end = 0.25
+if( is.null(opt$finish_iters) ) opt$finish_iters = 10
 if( is.null(opt$bgfile)       ) opt$bgfile = 'halo.bg.file'
 #if( is.null(opt$regions)      ) opt$regions = 'tssflat.tsv'
 # because we are generally comparing to ChIP data in direct upstream regions in other analyses(?),
@@ -92,8 +94,8 @@ inputs = list(
 	'ChIP'         = list(Lrp.ChIP.targets),
 #	'pos.ChIP'     = list(pos.correlated.ChIP.targets),
 #	'neg.ChIP'     = list(neg.correlated.ChIP.targets),
-	'pos.neg.ChIP' = list(pos.correlated.ChIP.targets, neg.correlated.ChIP.targets),
-	'pos.neg.cor'  = list(pos.correlated.genes, neg.correlated.genes)
+	'pos.neg.ChIP' = list(pos.correlated.ChIP.targets, neg.correlated.ChIP.targets)
+#	'pos.neg.cor'  = list(pos.correlated.genes, neg.correlated.genes)
 #	'pos.ChIP.KO'  = pos.correlated.ChIP.targets.overlapwith.KO,
 #	'neg.ChIP.KO'  = neg.correlated.ChIP.targets.overlapwith.KO,
 #	'pos.genes.KO' = pos.correlated.genes.overlapwith.KO,
@@ -159,6 +161,7 @@ for(tf in 1:nrow(tftable)){
 			maxhits=opt$maxhits,
 			mixture_start=opt$mixture_start,
 			mixture_end=opt$mixture_end,
+			finish_iters=opt$finish_iters,
 			pseudocounts=opt$pseudocounts,
 			mt_start=opt$mt_start,
 			mt_end=opt$mt_end,

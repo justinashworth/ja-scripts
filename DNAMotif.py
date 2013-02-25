@@ -146,7 +146,7 @@ class DNAMotif:
 		out = []
 		if not self.data_type in self.matrix: raise RuntimeError('no data_type set')
 		if type == 'probs' and self.data_type=='counts': self.make_probs_matrix()
-		out.append('# %s' %name)
+		out.append('#name=%s' %name)
 		out.append('#format=simple')
 		out.append('#type=%s'%type)
 		out.append('pos%s%s' %(self.sep,string.join(self.bases,self.sep)))
@@ -275,9 +275,9 @@ class DNAMotifs:
 		out = []
 		if type == 'MEME': out.append(self.motifs[0].output_MEME_header())
 		for m in self.motifs:
-			name = None
+			name = m.name
 			if opt.outprefix: name = opt.outprefix
-			out.append(m.output(type,name))
+			out.append(m.output(type=type,name=name))
 		out = string.join(out,'\n') + '\n'
 		if self.opt.outprefix:
 			fname = '%s.%s' %(opt.outprefix,type)

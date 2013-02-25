@@ -255,11 +255,11 @@ filter.hits.by.regions =
 }
 
 motif_bootstrap =
-	function(motfile,seqfile,bgfile,regionsfile,genelist=NULL,niter=10,maxhits=500,mixture_start=0.75,mixture_end=0.25,pseudocounts=1,mt_start=0.0005,mt_end=0.0001,images=T,prefix='BS.')
+	function(motfile,seqfile,bgfile,regionsfile,genelist=NULL,niter=100,maxhits=250,mixture_start=0.75,mixture_end=0.25,finish_iters=10,pseudocounts=1,mt_start=0.0005,mt_end=0.0001,images=T,prefix='BS.')
 {
 	result = list(motif=NULL, hits=NULL, target.genes=NULL, target.genes.matched=NULL, all.genes=NULL, all.genes.matched=NULL, enrichment.pval=NULL)
 	logf = paste(prefix,'log',sep='/')
-	cat(motfile,seqfile,bgfile,regionsfile,niter,maxhits,mixture_start,mixture_end,pseudocounts,mt_start,mt_end,images,'\n',file=logf)
+	cat(motfile,seqfile,bgfile,regionsfile,niter,maxhits,mixture_start,mixture_end,finish_iters,pseudocounts,mt_start,mt_end,images,'\n',file=logf)
 
 	# load searched sequence(s)
 	search_sequence = load.sequence(seqfile)
@@ -307,9 +307,15 @@ motif_bootstrap =
 
 	# TO DO: compute true background in regions being searched?
 
-	for( iter in 1:niter ) {
-		mixture = mixture_start - (mixture_start - mixture_end) * (iter-1)/(niter-1)
-		mt = mt_start - (mt_start - mt_end) * (iter-1)/(niter-1)
+	for( iter in 1:(niter+finish_iters) ) {
+		if(iter <= niter){
+			mixture = mixture_start - (mixture_start - mixture_end) * (iter-1)/(niter-1)
+			mt = mt_start - (mt_start - mt_end) * (iter-1)/(niter-1)
+		} else {
+			# finish_iters (allow motifs to settle with fixed final mixture factor and motif threshold)
+			mixture = mixture_end
+			mt = mt_end
+		}
 		cat('iter',iter,'mixture',mixture,'mt',mt,'\n')
 		#cat('MASTing motif from file "',motfile,'" in sequence from fasta file "',seqfile,'"\n',sep='')
 		cat('FIMO with motif from file "',motfile,'" in sequence from fasta file "',seqfile,'"\n',sep='')
@@ -427,7 +433,7 @@ motif_bootstrap =
 		result$motif = prob.matrix
 
 		# plot best aligned hit sites in sequences of interest
-		if(images & (iter==niter | iter==1)){
+		if(images & (iter==(niter+finish_iters) | iter==1)){
 
 			hit.centric = F
 			tss.centric = T
