@@ -16,7 +16,7 @@ p.add_option('-k','--pickle')
 opt,args = p.parse_args()
 
 re_substitution_new = re.compile( '.*Scores for mutation to ([a-zA-Z]+) at ([\.A-Z0-9]+)\.([a-zA-Z]+): bound = ([\-.0-9]+) .+ binding = ([\-.0-9]+) .+ specificity.bound = ([\-.0-9]+) .+ specificity.binding = ([\-.0-9]+)' )
-re_subs_2012 = re.compile( '.*Scores for sequence state [A-Z]\.[0-9]+.([a-zA-Z]+) at ([A-Z])\.([0-9]+).([a-zA-Z]+): bound = ([\-.0-9]+) .+ binding = ([\-.0-9]+) .+ specificity.bound = ([\-.0-9]+) .+ specificity.binding = ([\-.0-9]+)' )
+re_subs_2012 = re.compile( '.*Scores for sequence state [A-Z]\.[0-9]+.([a-zA-Z]+).* at ([A-Z])\.([0-9]+).([a-zA-Z]+).*: bound = ([\-.0-9]+) .+ binding = ([\-.0-9]+) .+ specificity.bound = ([\-.0-9]+) .+ specificity.binding = ([\-.0-9]+)' )
 # Scanning protein positions that interface with DNA position(s) CHAIN.###.TYPE
 re_scandna = re.compile('Scanning protein positions that interface with DNA position\(s\) ([A-Z]).([0-9]+).([a-zA-Z0-9]+)')
 

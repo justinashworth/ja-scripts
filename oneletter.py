@@ -6,6 +6,6 @@ sep='\t'
 
 fstr = open(sys.argv[1]).read()
 for letter,three in threeletter.items():
-	rethree = re.compile('%s%s' %(three,sep) )
+	rethree = re.compile('%s%s' %(three,sep), re.IGNORECASE )
 	fstr = rethree.sub( '%s%s' %(letter,sep), fstr )
 print fstr

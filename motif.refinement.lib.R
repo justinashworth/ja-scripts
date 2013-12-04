@@ -65,6 +65,33 @@ seqs.to.count.matrix =
 	return(cmat)
 }
 
+weighted.count.matrix =
+	function(hits,weights,sequence)
+{
+	hitseqs = get.hitseqs(hits,sequence)
+	names(hitseqs) = hits$regionnames
+	cat(paste(head(hitseqs),'\n',sep=''),'...\n',sep='')
+
+	ltrs = c('A','C','G','T')
+	maxlen = max(sapply(hitseqs,nchar))
+	cmat = matrix(0,nrow=maxlen,ncol=length(ltrs))
+	colnames(cmat) = ltrs
+
+	for(gene in names(hitseqs)){
+		seq = hitseqs[[gene]]
+		weight = 0
+		if(gene %in% names(weights)){
+			weight = weights[[gene]]
+		}
+		for(char in 1:nchar(seq)){
+			ltr = substring(seq,char,char)
+			if(!ltr %in% ltrs) next
+			cmat[char,ltr] = cmat[char,ltr] + weight
+		}
+	}
+	return(cmat)
+}
+
 # open starting MEME file, load prob matrix and display
 # assumes implicit MEME formatting and 4-column prob matrix
 MEME.pmat.from.file =
@@ -144,7 +171,7 @@ load_bgprobs =
 }
 
 load_regions_from_genecoords =
-	function(file,window=c(300,100))
+	function(file,window=c(250,50))
 {
 # load regions in order to filter genome hits
 # regions is a 2-column matrix of start and end positions, with optional rownames
@@ -155,16 +182,19 @@ load_regions_from_genecoords =
 	coords$cis.start = 0
 	coords$cis.end = 0
 	fwd = coords$Orientation == 'For'
-	coords$cis.start[fwd] = coords$Start[fwd] - upstream
-	coords$cis.end[fwd] = coords$Start[fwd] + downstream
-	# in halo gene coords, 'Start' for reverse-strand genes is > 'Stop'
+	coords$cis.start[fwd] = as.integer(coords$Start[fwd] - upstream)
+	coords$cis.end[fwd] = as.integer(coords$Start[fwd] + downstream)
+	# in halo gene coords, 'Start' is the start of transcription, and thus for reverse-strand genes is > 'Stop'
+	# for our purposes however, we will define region start < end, even for rvs genes (this makes region checks simpler)
 	rvs = coords$Orientation == 'Rev'
-	coords$cis.start[rvs] = coords$Start[rvs] + upstream
-	coords$cis.end[rvs] = coords$Start[rvs] - downstream
+	coords$cis.start[rvs] = as.integer(coords$Start[rvs] - downstream)
+	coords$cis.end[rvs] = as.integer(coords$Start[rvs] + upstream)
 	regions=coords[, c('canonical_Name','where','cis.start','cis.end','Orientation','Start','Stop')]
 	names(regions)=c('name','seq','start','end','dir','tss','tts')
+	#regions=coords[, c('canonical_Name','where','cis.start','cis.end','Orientation')]
+	#names(regions)=c('name','seq','start','end','dir')
 #	cat(nrow(regions), ' regions\n')
-	print( head(regions) )
+#	print( head(regions) )
 	return(regions)
 }
 
@@ -194,6 +224,27 @@ load_regions_from_TSS =
 	return(regions)
 }
 
+seqs_for_regions =
+	function(regs,seqs='halo.genome.fa')
+{
+	require(Biostrings)
+	gs = readDNAStringSet(seqs)
+	apply(regs, 1, function(x){
+		cat(x[['name']],'\n')
+		start = as.integer(x[['start']])
+		end = as.integer(x[['end']])
+		cat(start,end,'\n')
+		if(start<1) start = 1
+		ll=length(gs[[x[['seq']]]])
+		if(end>ll) end = ll
+		cat(start,end,'\n')
+		ss=gs[[ x[['seq']] ]][ start:end ]
+		if(x[['dir']]=='Rev'){ ss=reverseComplement(ss) }
+		return(ss)
+	})
+}
+
+
 regions_for_genes_file =
 	function(file,regions)
 {
@@ -215,10 +266,14 @@ hits.in.regions =
 {
 	# filter/annotate hits in regions,
 	# expand/flatten for hits matching multiple regions as necessary
-	#print(head(regions))
-	#print(head(hits))
 	hitindices = c()
 	regionnames = c()
+
+	if(!all(regions$end >= regions$start)){
+		cat('PROBLEM: region starts > region ends\n')
+		log(0)
+	}
+
 	for(hit in 1:nrow(hits)){
 		seq.match = as.character(hits[hit,'seq']) == as.character(regions$seq)
 		pos = (hits[hit,'start'] + hits[hit,'end']) / 2
@@ -231,32 +286,28 @@ hits.in.regions =
 			regionnames = c(regionnames, as.character(matched.regions[match]))
 		}
 	}
-	#print(length(hitindices))
-	#print(head(hitindices))
-	#print(length(regionnames))
-	#print(head(regionnames))
 	hitsinregions = unique( cbind( hits[hitindices,], regionnames) )
-	#print(head(hitsinregions))
 	return(hitsinregions)
 }
 
-filter.hits.by.regions =
-	function(hits,regions)
-{
-	sapply(1:nrow(hits),
-		function(h){
-			seq.match = hits[h,1] == regions$seq
-			pos = (hits[h,3] + hits[h,4]) / 2
-			after.start = pos >= regions$start
-			before.end = pos <= regions$end
-			return( TRUE %in% (seq.match & after.start & before.end) )
-		}
-	)
-}
-
-motif_refine =
-	function(motfile,seqfile,bgfile,regionsfile,genelist=NULL,niter=100,maxhits=250,mixture_start=0.75,mixture_end=0.25,finish_iters=10,pseudocounts=1,mt_start=0.0005,mt_end=0.0001,images=T,prefix='BS.')
-{
+motif_refine = function(
+	motfile,
+	seqfile,
+	bgfile,
+	regionsfile,
+	genelist=NULL,
+	niter=100,
+	maxhits=500,
+	mixture_start=0.75,
+	mixture_end=0.25,
+	finish_iters=10,
+	pseudocounts=1,
+	mt_start=0.0005,
+	mt_end=0.0001,
+	images=T,
+	prefix='MR.',
+	geneweights=NULL
+){
 	result = list(motif=NULL, hits=NULL, target.genes=NULL, target.genes.matched=NULL, all.genes=NULL, all.genes.matched=NULL, enrichment.pval=NULL)
 	logf = paste(prefix,'log',sep='/')
 	cat(motfile,seqfile,bgfile,regionsfile,niter,maxhits,mixture_start,mixture_end,finish_iters,pseudocounts,mt_start,mt_end,images,'\n',file=logf)
@@ -347,7 +398,6 @@ motif_refine =
 
 		# filter hits by regions (if present)
 		if(!is.null(regions)) {
-			#hits = hits[ filter.hits.by.regions(hits,regions), ]
 			cat('fetching hits in regions\n')
 			hits = hits.in.regions(hits,regions)
 
@@ -391,18 +441,16 @@ motif_refine =
 		hitseqs = get.hitseqs(hits,search_sequence)
 		cat(paste(head(hitseqs),'\n',sep=''),'...\n',sep='')
 
-		count.matrix = seqs.to.count.matrix(hitseqs)
-		cat('Count matrix (raw):\n')
-		print(count.matrix)
-
-		## ensure that pseudocounts don't swap out signal for small numbers of hits--
-		## limit pseudocount influence to <= 10%, by scaling up counts for small numbers of hits (i.e. <10)
-		## actually, can just set pseudocounts value to 0.1 to achieve the same result--do so in function call
-		#if(length(hitseqs)<10){
-		#	count.matrix = count.matrix * (10 / length(hitseqs))
-		#	cat('Count matrix (scaled):\n')
-		#	print(count.matrix)
-		#}
+		if(!is.null(geneweights)){
+			# make a pseudo-count matrix weighted by orthogonal gene scores (e.g. ChIP strength/certainty)
+			count.matrix = weighted.count.matrix(hits,geneweights,search_sequence)
+			cat('Weighted count matrix (raw):\n')
+			print(count.matrix)
+		} else {
+			count.matrix = seqs.to.count.matrix(hitseqs)
+			cat('Count matrix (raw):\n')
+			print(count.matrix)
+		}
 
 		## add pseudocounts for mathematical stability
 		count.matrix = count.matrix + pseudocounts

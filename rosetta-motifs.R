@@ -2,7 +2,7 @@ probMatrixFromFasta =
 	function(fastafile,filter='')
 {
 	require(Biostrings)
-	seqs=read.DNAStringSet(fastafile)
+	seqs=readDNAStringSet(fastafile)
 	if(filter != '') seqs = gsub(filter,'',seqs)
 	ppm=consensusMatrix(seqs,as.prob=T,baseOnly=T)
 	ppm=as.matrix(ppm)
@@ -17,7 +17,7 @@ seqlogoFromFasta =
 	# limit to first four rows (ACGT) (drops fifth row, 'other')
 	ppm=ppm[seq(1,4),]
 	# hardcoded arbitrary subsequence for 2e1c DNA (otherwise rosetta 'design_mutations' DNA .fa files read through both strands)
-	#ppm=ppm[,seq(2,16)]
+	ppm=ppm[,seq(2,16)]
 	# normalize (if necessary)
 	ppm=t(t(ppm)*1/colSums(ppm))
 	if(plot){seqLogo(ppm)}

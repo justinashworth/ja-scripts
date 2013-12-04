@@ -63,6 +63,7 @@ MeDiChI.peaks =
 
 load.sequence =
 	# convenience function for loading fasta sequence into simple list format
+	# readFASTA DEPRECATED REPLACED BY read[XXX]StringSet( , format='fasta')
 	function(file='halo.genome.sequence.fa')
 {
 	library(Biostrings)

@@ -2,6 +2,7 @@
 import os,re,string,sys,math
 from optparse import OptionParser
 from Fasta import *
+import random
 
 '''
 DESCRIPTION
@@ -12,6 +13,8 @@ To do: merge/interface with InfoContent class
 '''
 
 __author__ = "Justin Ashworth"
+
+RandPos = { 'A':0.25, 'C':0.25, 'G':0.25, 'T':0.25 }
 
 class DNAMotif:
 	bases = ['A','C','G','T']
@@ -27,6 +30,7 @@ class DNAMotif:
 		self.data_type = data_type
 		self.bg = bg
 		if not self.bg: self.bg = self.bg_default
+		self.score = None
 
 	def set_width(self,width):
 		self.width = width
@@ -42,6 +46,67 @@ class DNAMotif:
 			self.matrix['counts' ].append({ 'A':0,   'C':0,   'G':0,   'T':0 })
 			self.matrix['probs'  ].append({ 'A':0.0, 'C':0.0, 'G':0.0, 'T':0.0 })
 			self.matrix['logodds'].append({ 'A':0.0, 'C':0.0, 'G':0.0, 'T':0.0 })
+
+	def truncate(self,width):
+		width = min(self.width,width)
+		for type in self.matrix:
+			self.matrix[type] = self.matrix[type][:width]
+		self.width = width
+
+	def weaken(self,value):
+		#for in range(len(self.matrix['probs'])):
+		#	for b,val in self.matrix['probs'][i].items():
+		#		self.matrix['probs'][i][b] += value
+		for pos in self.matrix['probs']:
+			for b,val in pos.items():
+				pos[b] += value
+		self.normalize_probs()
+
+	def pad_left(self,pad):
+		w = len(self.matrix['probs'])
+		newmat = []
+		for i in range(pad):
+#			print i
+			newmat.append(RandPos)
+		for i in range(pad,w+pad):
+#			print i
+			newmat.append(self.matrix['probs'][i-pad])
+		self.set_width(w+pad)
+		self.matrix['probs'] = newmat
+#		print 'padded left by %i: %s' %(pad, self.consensus())
+
+	def pad_right(self,pad):
+		for i in range(pad):
+			self.matrix['probs'].append(RandPos)
+		self.width=len(self.matrix['probs'])
+#		print 'padded right by %i: %s' %(pad, self.consensus())
+
+	def consensus(self):
+		cons = []
+		for pos in self.matrix['probs']:
+			rand = True
+			topb = 'X'
+			topv = 0
+			for b,p in pos.items():
+				if not p==0.25: rand=False
+				if p>topv:
+					topv=p
+					topb=b
+			if rand: cons.append('n')
+			elif topb=='X': cons.append('X')
+			else: cons.append(topb)
+		return string.join(cons,'')
+
+	def matrix_from_lines(self,lines,type):
+		self.set_width(len(lines))
+		self.data_type = type
+		for i in range(len(lines)):
+			l = lines[i]
+			vals = l.strip().split()
+			#print vals
+			for b in range(len(self.bases)):
+				self.matrix[type][i][self.bases[b]]=float(vals[b])
+		self.normalize_probs()
 
 	def load_motif_file(self,fname):
 		if not os.path.exists(fname): raise IOError('file %s not found' %fname)
@@ -59,21 +124,21 @@ class DNAMotif:
 	def load_motif_simple(self,fname,data_type):
 		sys.stderr.write('loading simple matrix from: %s as type: %s\n' %(fname,data_type) )
 		colnames = []
-		rownames = []
 		temp_matrix = []
+		colnames = ['a','c','g','t']
 		for line in open(fname):
 			if line.startswith('#'): continue
 			if len(line) == 0: continue
-			if line.startswith('pos'):
+			if line.startswith('key'):
 				colnames = line.strip().split()[1:]
 				continue
 			fields = line.strip().split()
-			rownames.append(fields[0])
+			if not len(fields) == len(colnames):
+				raise RuntimeError('number of fields doesn\'t match number of colnames')
 			rowdict = {}
-			for i in range(len(fields)-1):
-				rowdict[colnames[i]] = float(fields[i+1])
+			for i in range(len(fields)):
+				rowdict[colnames[i]] = float(fields[i])
 			temp_matrix.append(rowdict)
-		#print temp_matrix
 		if data_type in self.matrix:
 			self.set_width(len(temp_matrix))
 			self.matrix[data_type] = temp_matrix
@@ -98,19 +163,20 @@ class DNAMotif:
 		self.bg = bg
 		return(bg)
 
-	def read_counts(self,mat=[]):
-		self.set_width(len(mat))
-		self.matrix['counts'] = mat
-		self.data_type = 'counts'
-
 	def make_counts_matrix(self,sequences=[]):
+		self.set_width( len(sequences[0]) )
 		for s in sequences:
+			#print s
 			l = len(s)
 			if l != self.width: raise RuntimeError('length mismatch')
 			for i in range(l):
 				base = s[i].upper()
 				if not base in self.bases: raise RuntimeError('wrong alphabet')
 				self.matrix['counts'][i][base] += 1
+
+	def probs_from_seqs(self,seqs):
+		self.make_counts_matrix(seqs)
+		self.make_probs_matrix()
 
 	def make_probs_matrix(self):
 		# (meaningless without filled counts matrix)
@@ -121,6 +187,12 @@ class DNAMotif:
 			for base in self.bases:
 				# as in transfac2meme
 				self.matrix['probs'][i][base] = float( self.matrix['counts'][i][base] + self.pseudocounts * self.bg[base] ) / ( total + self.pseudocounts )
+
+	def normalize_probs(self):
+		for pos in self.matrix['probs']:
+			tot = sum(pos.values())
+			for b,prob in pos.items():
+				pos[b] = float(prob)/tot
 
 	def make_logodds_matrix(self):
 		# (meaningless without filled probs matrix)
@@ -136,6 +208,21 @@ class DNAMotif:
 	def __str__(self):
 		return self.output_default('probs')
 
+	def __len__(self):
+		return len(self.matrix['probs'])
+
+	def same_probs(self,other):
+		p1 = self.matrix['probs']
+		p2 = other.matrix['probs']
+		for i in range(len(p1)):
+			for b in self.bases:
+				v1 = float(p1[i][b])
+				v2 = float(p2[i][b])
+				if abs(v2-v1) > 1e-10:
+#					print '%i,%s,diff %g' %(i,b,v2-v1)
+					return False
+		return True
+
 	def output(self,type='',name=None):
 		if not name: name = self.name
 		if type == 'MEME': return self.output_MEME(name)
@@ -149,7 +236,7 @@ class DNAMotif:
 		out.append('#name=%s' %name)
 		out.append('#format=simple')
 		out.append('#type=%s'%type)
-		out.append('pos%s%s' %(self.sep,string.join(self.bases,self.sep)))
+		out.append('key%s%s' %(self.sep,string.join(self.bases,self.sep)))
 		for i in range(self.width):
 			line = str(i)
 			for base in self.bases:
@@ -184,12 +271,13 @@ class DNAMotif:
 		out.append( string.join( [ '%s %f' %(base,self.bg[base]) for base in self.bases ] ) )
 		return string.join(out,'\n') + '\n'
 
-	def output_MEME(self,name):
+	def output_MEME(self,name=None,logodds=False):
 #		name=re.sub('\.','_',name)
 #		name=re.sub('\.','',name)
+		if not name: name = self.name
 		out = []
 		out.append( 'MOTIF %s' %name )
-		out.append( self.output_MEME_logodds() )
+		if logodds: out.append( self.output_MEME_logodds() )
 #		out.append( 'MOTIF %s' %name )
 		out.append( self.output_MEME_probs() )
 		return string.join(out,'\n') + '\n'
@@ -218,6 +306,68 @@ class DNAMotif:
 				line.append('%f' %self.matrix['probs'][i][base])
 			out.append(string.join(line,self.sep))
 		return string.join(out,'\n') + '\n'
+
+def mix_motifs_average(mot1,mot2,type='probs'):
+	mat1 = mot1.matrix[type]
+	mat2 = mot2.matrix[type]
+	if not len(mat1) == len(mat2):
+		sys.stderr.write('ERROR: can\'t mix motifs of different lengths\n')
+		return None
+	child = DNAMotif(width=len(mat1))
+	for i in range(len(mat1)):
+		for b in mot1.bases:
+			child.matrix[type][i][b] = float(mat1[i][b] + mat2[i][b]) / 2
+	child.normalize_probs()
+	child.data_type = 'probs'
+	return child
+
+def mix_motifs_recombine(mot1,mot2,type='probs'):
+	mat1 = mot1.matrix[type]
+	mat2 = mot2.matrix[type]
+	l1 = len(mat1)
+	l2 = len(mat2)
+	l = min(l1,l2)
+	child = DNAMotif(width=l)
+	for i in range(l):
+		# take position at random from a source mot, biased by score
+		s1 = mot1.score
+		s2 = mot2.score
+		rnd = random.uniform(0,s1+s2)
+		if rnd < s1:
+			for b in mot1.bases: child.matrix[type][i][b] = mat1[i][b]
+		else:
+			for b in mot1.bases: child.matrix[type][i][b] = mat2[i][b]
+	child.normalize_probs()
+	child.data_type = 'probs'
+	return child
+
+def mix_motifs(mot1,mot2,method='average',type='probs'):
+	if method=='average':
+		return mix_motifs_average(mot1,mot2,type)
+	if method=='recombine':
+		return mix_motifs_recombine(mot1,mot2,type)
+
+def center_gapped_motif(mot,gap):
+	newmot = DNAMotif()
+	w = len(mot.matrix['probs'])
+	mid = int(w/2)
+	gapi = range(mid,mid+gap)
+	newmot.set_width(w+gap)
+#	print w, mid
+#	print gapi
+	for i in range(mid):
+#		print i
+		newmot.matrix['probs'][i] = mot.matrix['probs'][i]
+	for i in gapi:
+#		print 'gap',i
+		newmot.matrix['probs'][i] = RandPos
+	for i in range(mid+gap,w+gap):
+#		print i
+		newmot.matrix['probs'][i] = mot.matrix['probs'][i-gap]
+	print 'created center-gapped motif: %s' %newmot.consensus()
+	newmot.name = '%s_cg%i' %(mot.name,gap)
+	newmot.data_type = 'probs'
+	return newmot
 
 class DNAMotifs:
 	def __init__(self):
@@ -286,6 +436,43 @@ class DNAMotifs:
 			f.close()
 			return 'output %s motif to %s' %(type,fname)
 		else: return out
+
+def readMEME_from_lines(lines,Eval_cutoff=1e100):
+	mots = []
+	record = False
+	matlines = []
+	re_eval = re.compile('E= ([0-9+-.e]+)')
+	re_name = re.compile('MOTIF\s+([^\s]+)')
+	Eval = 1e100
+	for line in lines:
+		namematch = re_name.search(line)
+		if namematch: name = namematch.groups()[0]
+		if line.startswith('letter-probability matrix'):
+			Eval = re_eval.search(line)
+			if Eval: Eval = float( Eval.groups()[0] )
+			else: Eval = None
+			record = True
+			continue
+		if line.startswith('------') or len(line.strip().split())<4:
+			if record:
+				if Eval <= Eval_cutoff or not Eval:
+					mot = DNAMotif(name='%s_%i'%(name,len(mots)))
+					mot.matrix_from_lines(matlines,'probs')
+					mots.append(mot)
+				# reset
+				Eval = 1e100
+				matlines = []
+			record = False
+		if record: matlines.append(line)
+	if record:
+		if Eval <= Eval_cutoff or not Eval:
+			mot = DNAMotif(name='%s_%i'%(name,len(mots)))
+			mot.matrix_from_lines(matlines,'probs')
+			mots.append(mot)
+	return(mots)
+
+def readMEME(path,Eval_cutoff=1e100):
+	return readMEME_from_lines(open(path).readlines())
 
 if __name__ == "__main__":
 	p=OptionParser()

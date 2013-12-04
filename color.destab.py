@@ -15,5 +15,18 @@ def color_destab(posfile,binding=False):
 		print chain, pos, which_n
 		print cols[int(which_n)]
 		cmd.color( cols[int(which_n)][0], 'c. %s and i. %s' %(chain,pos) )
+	# the following only works if DNASelections has alreay been run/called
+	cmd.hide('everything')
+	cmd.show('ribbon','notDNA')
+	cmd.set('ribbon_sampling',5)
+	cmd.show('lines','notDNA')
+	cmd.set('ray_trace_mode',0)
+	cmd.create('dnao','DNA')
+	cmd.hide('labels')
+	cmd.hide('everything','dnao')
+	cmd.hide('everything','DNA')
+	cmd.show('surface','dnao')
+	cmd.show('spheres','r. hoh w. 4 of DNA')
+	cmd.color('marine','r. hoh')
 
 cmd.extend('color_destab',color_destab)
