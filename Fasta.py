@@ -313,7 +313,7 @@ class FastaSeqs:
 	def rawfiles(self):
 		for key in self.order:
 			seq = self.seqs[key]
-			f=open('%s.raw'%seq.shortname,'w')
+			f=open('%s.raw'%seq.shortname(),'w')
 			f.write('%s\n'%seq.seq.lower())
 			f.close()
 		return self.summarize()

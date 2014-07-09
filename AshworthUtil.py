@@ -511,6 +511,8 @@ class Chain:
 	def __str__(self):
 		out = 'Chain %s: %s to %s\n' %(self.id, self.start(), self.end())
 		return out + self.seq()
+	def fasta(self,prefix=''):
+		return '>%s%s_%s-%s\n%s\n' %(prefix,self.id, self.start(), self.end(), self.seq())
 	def start(self):
 		return min(self.residues.keys()).pos
 	def end(self):
