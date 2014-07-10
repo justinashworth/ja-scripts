@@ -1,10 +1,8 @@
-#!/usr/bin/env Rscript
-
 # search target sequence (e.g. genome) with a starting MEME motif,
-#1 find matches (to do: optionally filtered to certain regions, e.g. promoters or ChIP overlaps?),
+#1 find matches
 #2 build new motif based on actual matched sequences
 #3 re-search with new [mixture] motif
-# repeat 1-3 until satisfied
+# repeat 1-3 until converged
 
 load.sequence =
 	# convenience function for loading fasta sequence into simple list format
@@ -356,8 +354,6 @@ motif_refine = function(
 	n.regions = length( unique(regions$name) )
 	cat('there are ', n.regions, ' regions\n', file=logf, append=T)
 
-	# TO DO: compute true background in regions being searched?
-
 	for( iter in 1:(niter+finish_iters) ) {
 		if(iter <= niter){
 			mixture = mixture_start - (mixture_start - mixture_end) * (iter-1)/(niter-1)
@@ -464,7 +460,7 @@ motif_refine = function(
 			break
 		} else {
 			# mix the match-generated motif with the search motif
-			# how? lets just try weighted average probabilities...
+			# weighted average probabilities
 			prob.matrix = (1-mixture) * prob.matrix + mixture * last.prob.matrix
 		}
 
