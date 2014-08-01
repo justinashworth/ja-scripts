@@ -107,7 +107,7 @@ class DNAMotif:
 			for b in range(len(self.bases)):
 				self.matrix[type][i][self.bases[b]]=float(vals[b])
 		self.normalize_probs()
-		print 'read %s' %self.consensus()
+		print 'read motif: %s' %self.consensus()
 
 	def load_motif_file(self,fname):
 		if not os.path.exists(fname): raise IOError('file %s not found' %fname)
@@ -443,13 +443,13 @@ def readMEME_from_lines(lines,Eval_cutoff=1e100):
 	record = False
 	matlines = []
 	re_eval = re.compile('E= ([0-9+-.e]+)')
-	re_name = re.compile('MOTIF\s+([^\s]+)')
+	re_name = re.compile('^MOTIF\s+([^\s]+)')
 	Eval = 1e100
 	for line in lines:
 		namematch = re_name.search(line)
 		if namematch:
 			name = namematch.groups()[0]
-			print 'reading %s' %name
+			print 'reading MOTIF %s' %name
 		if line.startswith('letter-probability matrix'):
 			Eval = re_eval.search(line)
 			if Eval: Eval = float( Eval.groups()[0] )

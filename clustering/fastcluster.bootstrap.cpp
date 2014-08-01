@@ -9,21 +9,25 @@
 #include <cstdlib> // exit, EXIT_FAILURE
 #include <algorithm>
 #include <iterator>
+#include <iomanip>
 
-#include "fastcluster.cpp"
+#include "fastcluster_add.cpp"
 //#include "fastcluster_R.cpp"
 
 typedef std::vector<t_float> Values;
-typedef std::vector<Values> RatiosMatrix;
+typedef std::vector<Values> Matrix;
 typedef std::vector<std::string> Labels;
 typedef std::vector<size_t> Indices;
+typedef std::vector<int> Ints;
+
+static t_float const MAGIC_BIGNUM = 111e11;
 
 struct HclustResult {
 	Indices indices;
 	Labels ids;
-	std::vector<int> merge;
+	Ints merge;
 	Values height;
-	std::vector<int> order;
+	Ints order;
 };
 typedef std::vector<HclustResult> HclustResults;
 
@@ -36,24 +40,39 @@ std::ostream & operator << (std::ostream & out, Values const & vals )
 }
 
 t_float
-pearson_correlation(Values const & row1, Values const & row2)
+pearson_correlation(Values const & row1, Values const & row2, bool const pairwise_complete_obs)
 {
 	size_t N(row1.size());
-	t_float EX(0), EY(0), EXX(0), EYY(0), EXY(0);
+	t_float EX(0), EY(0), EXX(0), EYY(0), EXY(0), x(0), y(0);
+	bool matches(false);
 	for(size_t i(0); i<N; ++i){
-		EX += row1[i];
-		EY += row2[i];
-		EXX += row1[i]*row1[i];
-		EYY += row2[i]*row2[i];
-		EXY += row1[i]*row2[i];
+		x = row1[i];
+		y = row2[i];
+		if(pairwise_complete_obs && (x==MAGIC_BIGNUM || y==MAGIC_BIGNUM)) continue;
+		matches=true;
+		EX += x;
+		EY += y;
+		EXX += x*x;
+		EYY += y*y;
+		EXY += x*y;
 	}
-	return (EXY - EX*EY/N) / sqrt( (EXX - EX*EX/N)*(EYY - EY*EY/N) );
+	if(!matches) return(2.0);
+	else return (EXY - EX*EY/N) / sqrt( (EXX - EX*EX/N)*(EYY - EY*EY/N) );
+}
+
+bool is_number(const std::string& s) {
+	if(s.empty()) return false;
+	for(std::string::const_iterator it(s.begin()); it!=s.end(); ++it){
+		if(std::isdigit(*it) || (it==s.begin() && *it=='-')) continue;
+		return false;
+	}
+	return true;
 }
 
 void
 read_matrix_file(
 	std::string const & filename,
-	RatiosMatrix & rr,
+	Matrix & rr,
 	Labels & ids
 )
 {
@@ -64,19 +83,35 @@ read_matrix_file(
 		std::cerr << "ERROR: unable to open file " << filename.c_str() << std::endl;
 		exit(EXIT_FAILURE);
 	}
-	std::cout << "Reading file " << filename << std::endl;
+	std::cerr << "Reading file " << filename << std::endl;
 
 	// read input file
 	std::string line;
+	bool firstline(true);
 	while ( getline( file, line ) ) {
-		if ( line[0] == '#' | line.substr(0,3)=="tag" ) continue;
+		// skip the first line, which should be a header
+		if(firstline){ firstline=false; continue; }
 		std::istringstream linestream(line);
-		std::string id;
-		linestream >> id;
-		ids.push_back(id);
 		Values ratios;
-		t_float value;
-		while ( linestream >> value ) ratios.push_back(value);
+		std::string token;
+		bool id(true);
+		while(getline(linestream, token, ' ')){
+//			std::cerr << token << ":";
+			// first token in line should be an id
+			if(id){
+				ids.push_back(token);
+				id=false;
+				continue;
+			}
+			// the rest should be numbers, but sometimes "NA"
+			// set any "NA"s to a magic big number to keep track later
+			t_float value;
+			if(token=="NA") value=MAGIC_BIGNUM;
+			else value=std::stof(token);
+//			std::cerr << value << std::endl;
+			ratios.push_back(value);
+		}
+
 		rr.push_back(ratios);
 	}
 }
@@ -125,49 +160,122 @@ void head_of_result(HclustResult const & result, size_t nprint=3)
 	std::cout << std::endl;
 }
 
-void output_results(HclustResults const & results, std::string prefix="")
+void
+get_k_clusters(HclustResult const &, std::vector<Labels> &, size_t const)
+{
+	// not sure of the best/cleanest/most efficient way to do this
+}
+
+void output_clusters(HclustResult const & result, std::string prefix="")
+{
+	// K-based cluster selection: recursive agglomeration until k is reached
+
+	size_t n(result.indices.size()), by(1);
+	if(n<=100) by=10;
+	else by=100;
+
+	size_t end(n/by);
+	for(size_t i(1); i<=end; ++i){
+		size_t k(i*by);
+		std::cout << k << " clusters..." << std::endl;
+
+		std::vector<Labels> clusters;
+		get_k_clusters(result,clusters,k);
+
+		std::ofstream of;
+		std::ostringstream fname;
+		fname << prefix << "." << std::setw(6) << std::setfill('0') << k;
+		of.open(fname.str().c_str());
+		for(size_t cl(0); cl<clusters.size(); ++cl){
+			std::copy(clusters[cl].begin(), clusters[cl].end(), std::ostream_iterator<std::string>(of, " "));
+			of << '\n';
+		}
+		of.close();
+	}
+
+}
+
+void output_bootstrap_results(HclustResults const & bootstraps, std::string prefix="bootstrap.")
 {
 	// outputs that can be read into R
 	std::ofstream of;
 	std::string fname(prefix+"indices");
 	of.open(fname.c_str());
-	for(size_t i(0); i<results.size(); ++i){
-		std::copy(results[i].indices.begin(), results[i].indices.end(), std::ostream_iterator<int>(of, " "));
+	for(HclustResults::const_iterator bs(bootstraps.begin()); bs!=bootstraps.end(); ++bs){
+		std::copy(bs->indices.begin(), bs->indices.end(), std::ostream_iterator<int>(of, " "));
 		of << '\n';
 	}
 	of.close();
 
 	fname = prefix+"labels";
 	of.open(fname.c_str());
-	for(size_t i(0); i<results.size(); ++i){
-		std::copy(results[i].ids.begin(), results[i].ids.end(), std::ostream_iterator<std::string>(of, " "));
+	for(HclustResults::const_iterator bs(bootstraps.begin()); bs!=bootstraps.end(); ++bs){
+		std::copy(bs->ids.begin(), bs->ids.end(), std::ostream_iterator<std::string>(of, " "));
 		of << '\n';
 	}
 	of.close();
 
 	fname = prefix+"merges";
 	of.open(fname.c_str());
-	for(size_t i(0); i<results.size(); ++i){
-		std::copy(results[i].merge.begin(), results[i].merge.end(), std::ostream_iterator<int>(of, " "));
+	for(HclustResults::const_iterator bs(bootstraps.begin()); bs!=bootstraps.end(); ++bs){
+		std::copy(bs->merge.begin(), bs->merge.end(), std::ostream_iterator<int>(of, " "));
 		of << '\n';
 	}
 	of.close();
 
 	fname = prefix+"heights";
 	of.open(fname.c_str());
-	for(size_t i(0); i<results.size(); ++i){
-		std::copy(results[i].height.begin(), results[i].height.end(), std::ostream_iterator<t_float>(of, " "));
+	for(HclustResults::const_iterator bs(bootstraps.begin()); bs!=bootstraps.end(); ++bs){
+		std::copy(bs->height.begin(), bs->height.end(), std::ostream_iterator<t_float>(of, " "));
 		of << '\n';
 	}
 	of.close();
 
 	fname = prefix+"orders";
 	of.open(fname.c_str());
-	for(size_t i(0); i<results.size(); ++i){
-		std::copy(results[i].order.begin(), results[i].order.end(), std::ostream_iterator<int>(of, " "));
+	for(HclustResults::const_iterator bs(bootstraps.begin()); bs!=bootstraps.end(); ++bs){
+		std::copy(bs->order.begin(), bs->order.end(), std::ostream_iterator<int>(of, " "));
 		of << '\n';
 	}
 	of.close();
+
+}
+
+void output_result(HclustResult const & result, std::string prefix="")
+{
+	// outputs that can be read into R
+	std::ofstream of;
+	std::string fname(prefix+"indices");
+	of.open(fname.c_str());
+	std::copy(result.indices.begin(), result.indices.end(), std::ostream_iterator<int>(of, " "));
+	of << '\n';
+	of.close();
+
+	fname = prefix+"labels";
+	of.open(fname.c_str());
+	std::copy(result.ids.begin(), result.ids.end(), std::ostream_iterator<std::string>(of, " "));
+	of << '\n';
+	of.close();
+
+	fname = prefix+"merges";
+	of.open(fname.c_str());
+	std::copy(result.merge.begin(), result.merge.end(), std::ostream_iterator<int>(of, " "));
+	of << '\n';
+	of.close();
+
+	fname = prefix+"heights";
+	of.open(fname.c_str());
+	std::copy(result.height.begin(), result.height.end(), std::ostream_iterator<t_float>(of, " "));
+	of << '\n';
+	of.close();
+
+	fname = prefix+"orders";
+	of.open(fname.c_str());
+	std::copy(result.order.begin(), result.order.end(), std::ostream_iterator<int>(of, " "));
+	of << '\n';
+	of.close();
+
+//	output_clusters(result,prefix);
 }
 
 void run_fastcluster(HclustResult & bs_result, t_float * dist, int method)
@@ -236,6 +344,7 @@ void run_fastcluster(HclustResult & bs_result, t_float * dist, int method)
 
 	members.free();
 }
+
 ////////////////////////////////////////////////////////////////////////////////
 void usage_error()
 {
@@ -286,7 +395,7 @@ std::srand(time(NULL));
 	}
 
 	// read in matrix
-	RatiosMatrix rr;
+	Matrix rr;
 	Labels ids;
 	read_matrix_file(ratiosfilename, rr, ids);
 	size_t ntest(std::min(size_t(5),rr.size()));
@@ -298,7 +407,7 @@ std::srand(time(NULL));
 	std::cout << "Testing distance metric (Pearson distance) for " << ntest << " genes:" << std::endl;
 	for(size_t i(0); i<ntest; ++i){
 		for(size_t j(i+1); j<ntest; ++j){
-			t_float cor(pearson_correlation(rr[i],rr[j]));
+			t_float cor(pearson_correlation(rr[i],rr[j],true));
 			std::cout << ids[i] << " vs " << ids[j] << "(Pearson correlation): " << cor << std::endl;
 		}
 	}
@@ -306,18 +415,18 @@ std::srand(time(NULL));
 	// Parameter N: number of elements
 	const t_index N(rr.size());
 
-	std::cout << "Dissimilarity matrix..." << std::endl;
 	// Parameter NN: number of non-redundant, non-self comparisons
 	const std::ptrdiff_t NN = static_cast<std::ptrdiff_t>((N)*(N-1)/2);
 	std::cout << "N is " << N << " and NN is " << NN << std::endl;
+	std::cout << "Dissimilarity matrix..." << std::endl;
 	auto_array_ptr<t_float> dist;
 	dist.init(NN);
 	std::ptrdiff_t p(0);
 	for(size_t r1(0), end(rr.size()); r1<(end-1); ++r1){
 		for(size_t r2(r1+1); r2<end; ++r2){
-			dist[p] = 1.0 - pearson_correlation(rr[r1],rr[r2]);
+			dist[p] = 1.0 - pearson_correlation(rr[r1],rr[r2],true);
 			// fastcluster takes squared distances for some metrics (i.e. Euclidean)
-//			dist[p] = pow(1.0 - pearson_correlation(rr[r1],rr[r2]),2);
+//			dist[p] = pow(1.0 - pearson_correlation(rr[r1],rr[r2],true),2);
 			++p;
 		}
 	}
@@ -331,11 +440,10 @@ std::srand(time(NULL));
 	}
 
 	run_fastcluster(result, dist, method);
-	HclustResults results;
-	results.push_back(result);
 
 	// bootstrap iterations
 	HclustResults bootstrap_results;
+
 	for(unsigned bs(0); bs<bootstraps; ++bs){
 		std::cout << "Bootstrap " << bs << ":" << std::endl;
 
@@ -366,44 +474,12 @@ std::srand(time(NULL));
 	}
 	dist.free();     // Free the memory now
 
-	if(false){
-	for(size_t i(0); i<bootstrap_results.size(); ++i){
-		std::cout << "Bootstrap " << i << ":" << std::endl;
-		head_of_result(bootstrap_results[i]);
-	}}
+	output_result(result,"hc.");
 
-/* next:
-	// 1. selection of reasonable heights:
-### R code
-meanh = mean(hc$height)
-sdh = sd(hc$height)
-cat('mean height is:',meanh,'(sd',sdh,')\n')
-hs = seq(meanh+sdh, max(hc$height)-2*sdh, sdh/5)
+	output_bootstrap_results(bootstrap_results);
 
-	// 2. height-based cluster selection (reimplement to match dendextendRcpp::Rcpp_cut_lower)
-
-###
-cuts = lapply(hs, function(h){
-	cat('Cutting at height',h,':')
-	cls = Rcpp_cut_lower(as.dendrogram(hc), h=h)
-	cat(length(cls),'clusters\n')
-	cls
-})
-names(cuts) = sapply(cuts,function(x){length(x)})
-
-# clusters containing '233'
-has233 = sapply(cuts, function(cls){ which( sapply(cls, function(x){'233' %in% labels(x)})) })
-names(has233) = names(cuts)
-###
-
-	// 3. empirical distributions of pairwise cluster co-memberships for many choices of k
-	// 4. scriptify importation and processing in R
-*/
-
-	std::cout << "Output results..." << std::endl;
-	output_results(results,"hc.");
-	if(bootstrap_results.size()>0)
-		output_results(bootstrap_results,"bootstrap.");
+	// to do: height-based agglomeration to yield k clusters,
+	// empirical distributions of pairwise cluster co-memberships for many choices of k
 
 	return 0;
 }
