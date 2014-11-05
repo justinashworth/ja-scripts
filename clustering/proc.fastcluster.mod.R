@@ -71,7 +71,7 @@ for(q in qs){
 	# plot subdendrogram
 	for(i in 1:length(cuts)){
 		fname = sprintf('cluster.%05i.%s.pdf',as.integer(names(cuts)[i]),q)
-#		if(file.exists(fname)){ cat('plot',fname,'exists, skipping\n'); next }
+		if(file.exists(fname)){ cat('plot',fname,'exists, skipping\n'); next }
 		if(length(hasit)==0) next
 		if(length(hasit[[i]])==0) next
 		if(is.na(hasit[[i]] | is.null(hasit[[i]]))) next
@@ -97,7 +97,7 @@ for(q in qs){
 
 for(k in names(clids)){
 	fname=sprintf('sizedist.%s.pdf',k)
-#	if(file.exists(fname)){ cat('plot',fname,'exists, skipping\n'); next }
+	if(file.exists(fname)){ cat('plot',fname,'exists, skipping\n'); next }
 	pdf(fname,useDingbats=F)
 	plot(density(sapply(clids[[k]],length)),main=sprintf('cluster size distribution: k=%s',k))
 	dev.off()
@@ -105,7 +105,7 @@ for(k in names(clids)){
 }
 
 
-choice = "500"
+choice = "400"
 
 # plot all cluster dendrograms
 cat('dendrograms\n')
